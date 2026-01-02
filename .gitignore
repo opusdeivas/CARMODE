@@ -1,0 +1,19 @@
+# Keil build output
+Objects/
+Listings/
+*.o
+*.obj
+*.lst
+*.map
+*.axf
+*.elf
+*.hex
+*.bin
+
+# Keil user files
+*.uvoptx
+*.uvguix
+
+# OS junk
+.DS_Store
+Thumbs.db
