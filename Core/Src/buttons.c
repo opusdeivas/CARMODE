@@ -196,6 +196,29 @@ bool Buttons_IsRunning(Buttons_Handle_t *btn)
     return (btn->state == CAR_STATE_RUNNING);
 }
 
+void Buttons_SetState(Buttons_Handle_t *btn, Car_State_t state)
+{
+    btn->state = state;
+    
+    /* Update LED pattern based on new state */
+    switch (state) {
+        case CAR_STATE_IDLE: 
+            Utils_SetLEDPattern(LED_PATTERN_BLINK_SLOW);
+            break;
+        case CAR_STATE_RUNNING:
+            Utils_SetLEDPattern(LED_PATTERN_BLINK_FAST);
+            break;
+        case CAR_STATE_STOPPED:
+            Utils_SetLEDPattern(LED_PATTERN_OFF);
+            break;
+        case CAR_STATE_ERROR:
+            Utils_SetLEDPattern(LED_PATTERN_BLINK_FAST);
+            break;
+        default:
+            break;
+    }
+}
+
 void Buttons_SetComplete(Buttons_Handle_t *btn)
 {
     /* Called when task completes successfully */

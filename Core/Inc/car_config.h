@@ -46,7 +46,7 @@ extern "C" {
  * ============================================================================ */
 #define MOTOR_PWM_MAX           1279      // Maximum PWM value (100% duty)
 #define MOTOR_PWM_MIN           0         // Minimum PWM value
-#define MOTOR_PWM_LIMIT         1000      // Software limit (~78% duty) for safety
+#define MOTOR_PWM_LIMIT         300      // Software limit (~78% duty) for safety
 
 /* Speed settings in mm/s */
 #define SPEED_CRUISE_MIN        300.0f    // Minimum cruise speed
@@ -56,9 +56,9 @@ extern "C" {
 #define SPEED_CRAWL             100.0f    // Very slow speed for precision
 
 /* PWM estimates (will be refined by PID) */
-#define PWM_CRUISE              350       // ~27% duty for cruise
-#define PWM_APPROACH            200       // ~16% duty for approach
-#define PWM_MANEUVER            250       // ~20% duty for maneuver
+#define PWM_CRUISE              200       // ~27% duty for cruise
+#define PWM_APPROACH            150       // ~16% duty for approach
+#define PWM_MANEUVER            100       // ~20% duty for maneuver
 
 /* ============================================================================
  * ULTRASONIC PARAMETERS

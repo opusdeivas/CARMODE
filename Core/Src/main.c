@@ -76,10 +76,10 @@ uint32_t last_us_sequence = 0;
 uint32_t last_debug_print = 0;
 
 /* Sensor data cache */
-uint16_t front_mm = 0;
-uint16_t left_mm = 0;
-uint16_t right_mm = 0;
-uint16_t rear_mm = 0;
+uint16_t front_mm = 0xFFFF;  // Max range = "no reading yet"
+uint16_t left_mm = 0xFFFF;
+uint16_t right_mm = 0xFFFF;
+uint16_t rear_mm = 0xFFFF;
 
 /* Numerical variables */
 volatile extern int counter;
@@ -356,14 +356,14 @@ int main(void)
         
         if (state == CAR_STATE_RUNNING) {
             /* Print sensor distances */
-            Debug_Print("D: %. 0f S:%.0f H:%.1f | F:%4d L:%4d R:%4d | Nav:%d\r\n",
-                        Encoder_GetDistance(&encoder),
-                        Encoder_GetSpeed(&encoder),
-                        Encoder_GetHeading(&encoder),
-                        front_mm, left_mm, right_mm,
-                        (Buttons_GetMode(&buttons) == CAR_MODE_1_OBSTACLE) ? 
-                            Navigation_GetNav1State(&navigation) : 
-                            Navigation_GetNav2State(&navigation));
+						Debug_Print("D:%. 0f S:%.0f H: %.1f | F:%u L:%u R:%u | Nav:%d\r\n",
+												Encoder_GetDistance(&encoder),
+												Encoder_GetSpeed(&encoder),
+												Encoder_GetHeading(&encoder),
+												(unsigned int)front_mm, (unsigned int)left_mm, (unsigned int)right_mm,
+												(Buttons_GetMode(&buttons) == CAR_MODE_1_OBSTACLE) ? 
+														Navigation_GetNav1State(&navigation) : 
+														Navigation_GetNav2State(&navigation));
         } else if (state == CAR_STATE_IDLE) {
             /* Occasional status print in idle */
             Debug_Print("IDLE | F:%4d L:%4d R:%4d B:%4d | UART:%lu EXTI:%lu\r\n",
@@ -833,6 +833,7 @@ static void MX_GPIO_Init(void)
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 	 HAL_NVIC_SetPriority(USART1_IRQn, 1, 0);
+	 HAL_NVIC_EnableIRQ(USART1_IRQn);
    HAL_NVIC_SetPriority(USART2_IRQn, 2, 0);
   /* USER CODE END MX_GPIO_Init_2 */
 }
