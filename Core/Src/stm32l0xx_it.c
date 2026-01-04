@@ -229,14 +229,29 @@ void USART2_IRQHandler(void)
 void USART1_IRQHandler(void)
 {
   /* USER CODE BEGIN USART1_IRQn 0 */
-  /* Check if RXNE flag is set (data received) */
-  if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE)) {
-      uint8_t data = (uint8_t)(huart1.Instance->RDR & 0xFF);
-      Encoder_ProcessByte(&encoder, data);
-  }
+   /* Check for errors first */
+    uint32_t isrflags = huart1.Instance->ISR;
+    uint32_t errorflags = (isrflags & (USART_ISR_PE | USART_ISR_FE | USART_ISR_ORE | USART_ISR_NE));
+    
+    if (errorflags != 0) {
+        /* Clear all error flags */
+        huart1.Instance->ICR = (USART_ICR_PECF | USART_ICR_FECF | USART_ICR_ORECF | USART_ICR_NCF);
+        
+        /* Clear HAL error code */
+        huart1.ErrorCode = HAL_UART_ERROR_NONE;
+        
+        /* Re-enable RXNE interrupt (it gets disabled on error) */
+        __HAL_UART_ENABLE_IT(&huart1, UART_IT_RXNE);
+    }
+    
+    /* Check if RXNE flag is set (data received) */
+    if ((isrflags & USART_ISR_RXNE) != 0) {
+        uint8_t data = (uint8_t)(huart1.Instance->RDR & 0xFF);
+        Encoder_ProcessByte(&encoder, data);
+    }
   /* USER CODE END USART1_IRQn 0 */
   
-  HAL_UART_IRQHandler(&huart1);
+  /*HAL_UART_IRQHandler(&huart1);*/
   
   /* USER CODE BEGIN USART1_IRQn 1 */
   /* USER CODE END USART1_IRQn 1 */

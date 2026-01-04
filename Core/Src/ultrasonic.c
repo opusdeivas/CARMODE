@@ -52,12 +52,12 @@ void US_Init(US_Handle_t *us, TIM_HandleTypeDef *htim)
     US_ConfigureSensor(&us->sensors[US_SENSOR_RIGHT],
                        RIGHT_TRIG_GPIO_Port, RIGHT_TRIG_Pin,
                        RIGHT_ECHO_GPIO_Port, RIGHT_ECHO_Pin,
-                       US_SIDE_MAX_RANGE_MODE1, US_SIDE_TIMEOUT_MODE1);
+                       US_SIDE_MAX_RANGE, US_SIDE_TIMEOUT_US);
     
     US_ConfigureSensor(&us->sensors[US_SENSOR_LEFT],
                        LEFT_TRIG_GPIO_Port, LEFT_TRIG_Pin,
                        LEFT_ECHO_GPIO_Port, LEFT_ECHO_Pin,
-                       US_SIDE_MAX_RANGE_MODE1, US_SIDE_TIMEOUT_MODE1);
+                       US_SIDE_MAX_RANGE, US_SIDE_TIMEOUT_US);
     
     US_ConfigureSensor(&us->sensors[US_SENSOR_REAR],
                        REAR_TRIG_GPIO_Port, REAR_TRIG_Pin,
@@ -76,21 +76,29 @@ void US_Init(US_Handle_t *us, TIM_HandleTypeDef *htim)
 
 void US_SetMode(US_Handle_t *us, uint8_t mode)
 {
+	
+		us->current_mode = mode;
+		/* Wait for any active sequence to complete */
+		/*
+    while (us->sequence_running) {
+        US_Update(us);  // Let it finish
+    }
+		
     us->current_mode = mode;
     
     if (mode == 2) {
-        /* Wall following - need longer side sensor range */
+        
         us->sensors[US_SENSOR_LEFT].max_range_mm = US_SIDE_MAX_RANGE_MODE2;
         us->sensors[US_SENSOR_LEFT].timeout_us = US_SIDE_TIMEOUT_MODE2;
         us->sensors[US_SENSOR_RIGHT].max_range_mm = US_SIDE_MAX_RANGE_MODE2;
         us->sensors[US_SENSOR_RIGHT].timeout_us = US_SIDE_TIMEOUT_MODE2;
     } else {
-        /* Obstacle avoidance - shorter side sensor range */
+        
         us->sensors[US_SENSOR_LEFT].max_range_mm = US_SIDE_MAX_RANGE_MODE1;
         us->sensors[US_SENSOR_LEFT].timeout_us = US_SIDE_TIMEOUT_MODE1;
         us->sensors[US_SENSOR_RIGHT].max_range_mm = US_SIDE_MAX_RANGE_MODE1;
         us->sensors[US_SENSOR_RIGHT].timeout_us = US_SIDE_TIMEOUT_MODE1;
-    }
+    }*/
 }
 
 void US_TriggerSensor(US_Handle_t *us, US_Sensor_ID_t sensor)

@@ -87,6 +87,8 @@ volatile extern int counter;
 /* Debug counters */
 volatile uint32_t exti_count = 0;
 volatile uint32_t uart_rx_count = 0;
+int servo_state = 0;
+int counter_now = 0;
 
 /* USER CODE END PV */
 
@@ -160,9 +162,9 @@ static void App_Init(void)
     Debug_Print("[OK] Servo initialized\r\n");
     
     /* Initialize motor */
-    Motor_Init(&motor, &htim22, TIM_CHANNEL_1, TIM_CHANNEL_2, 
-               RIGHT_EN_GPIO_Port, RIGHT_EN_Pin, 
-               LEFT_EN_GPIO_Port, LEFT_EN_Pin);
+    Motor_Init(&motor, &htim22, TIM_CHANNEL_2, TIM_CHANNEL_1, 
+							 LEFT_EN_GPIO_Port, LEFT_EN_Pin,
+               RIGHT_EN_GPIO_Port, RIGHT_EN_Pin);
     Debug_Print("[OK] Motor driver initialized\r\n");
     
     /* Initialize ultrasonic sensors */
@@ -294,6 +296,35 @@ int main(void)
 	/* Initialize application */
   App_Init();
 	
+	/* === ADD THIS DEBUG CODE === */
+	Debug_Print("\r\n=== UART1 Debug ===\r\n");
+
+	/* Check UART1 state */
+	Debug_Print("UART1 State: %d\r\n", huart1.gState);
+	Debug_Print("UART1 RxState: %d\r\n", huart1.RxState);
+	Debug_Print("UART1 Error: %lu\r\n", huart1.ErrorCode);
+
+	/* Check if RXNE interrupt is enabled */
+	if (__HAL_UART_GET_IT_SOURCE(&huart1, UART_IT_RXNE)) {
+			Debug_Print("RXNE interrupt:  ENABLED\r\n");
+	} else {
+			Debug_Print("RXNE interrupt: DISABLED <-- PROBLEM!\r\n");
+	}
+
+	/* Check NVIC */
+	if (NVIC_GetEnableIRQ(USART1_IRQn)) {
+			Debug_Print("USART1_IRQn:  ENABLED\r\n");
+	} else {
+			Debug_Print("USART1_IRQn: DISABLED <-- PROBLEM!\r\n");
+	}
+
+	/* Manual loopback test - send something to ESP32 */
+	Debug_Print("Sending PING to ESP32...\r\n");
+	Encoder_SendCommand(&encoder, "PING");
+
+	Debug_Print("===================\r\n\r\n");
+	/* === END DEBUG CODE === */
+	
 	/* Start ultrasonic sequence */
   US_StartSequence(&ultrasonic);
 	
@@ -313,7 +344,8 @@ int main(void)
     
     /* ===== ULTRASONIC SENSOR SEQUENCING ===== */
     US_Update(&ultrasonic);
-    
+   
+		
     if (US_SequenceComplete(&ultrasonic)) {
         US_GetAllDistances(&ultrasonic, &front_mm, &left_mm, &right_mm, &rear_mm);
         
@@ -321,6 +353,7 @@ int main(void)
         if ((now - last_us_sequence) >= 100) {
             last_us_sequence = now;
             US_StartSequence(&ultrasonic);
+						
         }
     }
     
@@ -331,6 +364,7 @@ int main(void)
         if (Buttons_IsRunning(&buttons)) {
             /* Update navigation (handles encoder + navigation logic) */
             Navigation_Update(&navigation);
+						
             
             /* Check for task completion (Mode 1 only) */
             if (Buttons_GetMode(&buttons) == CAR_MODE_1_OBSTACLE) {
@@ -349,28 +383,58 @@ int main(void)
     }
     
     /* ===== DEBUG OUTPUT ===== */
-    if ((now - last_debug_print) >= DEBUG_PRINT_INTERVAL_MS) {
+    /*
+		 if (servo_state == 0 & counter - counter_now >= 500) {
+				counter_now = counter;
+				Servo_SetAngle(&servo, 5);
+				servo_state =1;
+		}else if (servo_state == 1 & counter - counter_now >=500){
+					counter_now = counter;
+					Servo_SetAngle(&servo, -5);
+					servo_state =0;
+		}
+		*/
+		
+		if ((now - last_debug_print) >= DEBUG_PRINT_INTERVAL_MS) {
         last_debug_print = now;
-        
+				
         Car_State_t state = Buttons_GetState(&buttons);
         
-        if (state == CAR_STATE_RUNNING) {
+        
             /* Print sensor distances */
-						Debug_Print("D:%. 0f S:%.0f H: %.1f | F:%u L:%u R:%u | Nav:%d\r\n",
+					
+				if (state == CAR_STATE_RUNNING) {
+						Debug_Print("D:%.0f S:%.0f H:%.1f | F:%u L:%u R:%u | Nav:%d\r\n",
 												Encoder_GetDistance(&encoder),
 												Encoder_GetSpeed(&encoder),
 												Encoder_GetHeading(&encoder),
-												(unsigned int)front_mm, (unsigned int)left_mm, (unsigned int)right_mm,
+												(unsigned int)front_mm, 
+												(unsigned int)left_mm, 
+												(unsigned int)right_mm,
 												(Buttons_GetMode(&buttons) == CAR_MODE_1_OBSTACLE) ? 
-														Navigation_GetNav1State(&navigation) : 
-														Navigation_GetNav2State(&navigation));
+														(int)Navigation_GetNav1State(&navigation) : 
+														(int)Navigation_GetNav2State(&navigation));
         } else if (state == CAR_STATE_IDLE) {
-            /* Occasional status print in idle */
+            
             Debug_Print("IDLE | F:%4d L:%4d R:%4d B:%4d | UART:%lu EXTI:%lu\r\n",
                         front_mm, left_mm, right_mm, rear_mm,
                         encoder.packet_count, exti_count);
         }
-    }
+    
+	}
+				/* Simple encoder test - add in main loop */
+	/*	
+	static uint32_t last_enc_test = 0;
+		if ((now - last_enc_test) >= 200) {
+				last_enc_test = now;
+				Debug_Print("ENC pkts:%lu d: %.0f s:%.0f h:%.1f\r\n",
+										encoder. packet_count,
+										encoder.total_distance_mm,
+										encoder.speed_mm_s,
+										encoder.heading_rad * 57.3f);  // Convert to degrees
+		}
+	*/
+	
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

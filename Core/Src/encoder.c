@@ -16,6 +16,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include "utils.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
@@ -114,7 +115,10 @@ void Encoder_Init(Encoder_Handle_t *enc, UART_HandleTypeDef *huart)
 void Encoder_StartReceive(Encoder_Handle_t *enc)
 {
     /* Enable UART receive interrupt */
-    __HAL_UART_ENABLE_IT(enc->huart, UART_IT_RXNE);
+    /*__HAL_UART_ENABLE_IT(enc->huart, UART_IT_RXNE);*/
+	 __HAL_UART_ENABLE_IT(enc->huart, UART_IT_RXNE);
+    Debug_Print("[DBG] UART1 RXNE enabled:  %d\r\n", 
+                __HAL_UART_GET_IT_SOURCE(enc->huart, UART_IT_RXNE) ?  1 : 0);
 }
 
 void Encoder_ProcessByte(Encoder_Handle_t *enc, uint8_t data)
@@ -170,10 +174,18 @@ void Encoder_Update(Encoder_Handle_t *enc, int8_t steering_angle_sw)
     
     /* Calculate center distance (average of both wheels) */
     float center_delta_mm = (left_delta_mm + right_delta_mm) / 2.0f;
-    enc->total_distance_mm += fabsf(center_delta_mm);
+    enc->total_distance_mm += center_delta_mm;
     
     /* Differential odometry for heading and lateral offset */
     float wheel_diff_mm = right_delta_mm - left_delta_mm;
+		
+		/* Only update heading if difference is significant */
+		#define HEADING_DEADZONE_MM  10.0f  // Ignore differences < 10mm
+
+		if (fabsf(wheel_diff_mm) < HEADING_DEADZONE_MM) {
+				/* Negligible difference - assume straight */
+				wheel_diff_mm = 0.0f;
+		}
     
     /* Calculate actual WHEEL angle from SOFTWARE angle */
     float wheel_angle_deg = (float)steering_angle_sw * SERVO_LINKAGE_RATIO;

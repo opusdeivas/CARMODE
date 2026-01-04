@@ -434,10 +434,10 @@ void Navigation_Start(Navigation_Handle_t *nav, Car_Mode_t mode, uint16_t target
     nav->emergency_stop = false;
     
     if (mode == CAR_MODE_1_OBSTACLE) {
-        US_SetMode(nav->ultrasonic, 1);
+				US_SetMode(nav->ultrasonic, 1);
         Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
     } else if (mode == CAR_MODE_2_WALLFOLLOW) {
-        US_SetMode(nav->ultrasonic, 2);
+				US_SetMode(nav->ultrasonic, 2);
         nav->nav2_state = NAV2_STATE_RUNNING;
         nav->target_speed_mm_s = SPEED_CRUISE_MIN;
         Servo_SetAngle(nav->servo, 0);

@@ -49,16 +49,16 @@ extern "C" {
 #define MOTOR_PWM_LIMIT         300      // Software limit (~78% duty) for safety
 
 /* Speed settings in mm/s */
-#define SPEED_CRUISE_MIN        300.0f    // Minimum cruise speed
-#define SPEED_CRUISE_MAX        500.0f    // Maximum cruise speed
-#define SPEED_APPROACH          150.0f    // Approach/careful speed
-#define SPEED_MANEUVER          200.0f    // Speed during obstacle avoidance
-#define SPEED_CRAWL             100.0f    // Very slow speed for precision
+#define SPEED_CRUISE_MIN        150.0f    // Minimum cruise speed
+#define SPEED_CRUISE_MAX        300.0f    // Maximum cruise speed
+#define SPEED_APPROACH          100.0f    // Approach/careful speed
+#define SPEED_MANEUVER          150.0f    // Speed during obstacle avoidance
+#define SPEED_CRAWL             75.0f    // Very slow speed for precision
 
 /* PWM estimates (will be refined by PID) */
 #define PWM_CRUISE              200       // ~27% duty for cruise
-#define PWM_APPROACH            150       // ~16% duty for approach
-#define PWM_MANEUVER            100       // ~20% duty for maneuver
+#define PWM_APPROACH            100      // ~16% duty for approach
+#define PWM_MANEUVER            150       // ~20% duty for maneuver
 
 /* ============================================================================
  * ULTRASONIC PARAMETERS
@@ -71,14 +71,16 @@ extern "C" {
 
 /* Maximum ranges in mm */
 #define US_FRONT_MAX_RANGE      1500      // 1.5m front sensor range
-#define US_SIDE_MAX_RANGE_MODE1 1000      // 1.0m side range for obstacle avoidance
-#define US_SIDE_MAX_RANGE_MODE2 1500      // 1.5m side range for wall following
+//#define US_SIDE_MAX_RANGE_MODE1 1000      // 1.0m side range for obstacle avoidance
+//#define US_SIDE_MAX_RANGE_MODE2 1500      // 1.5m side range for wall following
+#define US_SIDE_MAX_RANGE 			1500
 #define US_REAR_MAX_RANGE       500       // 0.5m rear sensor range
 
 /* Timeout values in microseconds (range / 0.1715 + margin) */
 #define US_FRONT_TIMEOUT_US     9000      // ~1.5m range
-#define US_SIDE_TIMEOUT_MODE1   6000      // ~1.0m range
-#define US_SIDE_TIMEOUT_MODE2   9000      // ~1.5m range
+#define US_SIDE_TIMEOUT_US     9000      // ~1.5m range
+//#define US_SIDE_TIMEOUT_MODE1   6000      // ~1.0m range
+//#define US_SIDE_TIMEOUT_MODE2   9000      // ~1.5m range
 #define US_REAR_TIMEOUT_US      3000      // ~0.5m range
 
 /* Measurement interval */
@@ -120,9 +122,9 @@ extern "C" {
  * PID PARAMETERS
  * ============================================================================ */
 /* Speed PID (controls motor PWM based on encoder feedback) */
-#define PID_SPEED_KP            2.0f
-#define PID_SPEED_KI            0.5f
-#define PID_SPEED_KD            0.1f
+#define PID_SPEED_KP            1.0f
+#define PID_SPEED_KI            0.0f
+#define PID_SPEED_KD            0.0f
 #define PID_SPEED_MAX_OUTPUT    MOTOR_PWM_LIMIT
 #define PID_SPEED_MIN_OUTPUT    0
 
