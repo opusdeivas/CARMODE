@@ -1,4 +1,13 @@
-# Keil build output
+# ======================
+# Keil / MDK-ARM
+# ======================
+MDK-ARM/DebugConfig/
+MDK-ARM/RTE/
+MDK-ARM/*.uvguix.*
+*.dbgconf
+*.scvd
+
+# Build output
 Objects/
 Listings/
 *.o
@@ -9,11 +18,18 @@ Listings/
 *.elf
 *.hex
 *.bin
+*.d
+*.crf
+*.lnp
 
-# Keil user files
+# Keil user-specific files
 *.uvoptx
-*.uvguix
+*.uvguix.*
 
-# OS junk
+# ======================
+# OS / editor junk
+# ======================
 .DS_Store
 Thumbs.db
+*.swp
+*.tmp

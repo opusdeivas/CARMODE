@@ -18,6 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "servo.h"
+#include "motor.h"
+#include "buttons.h"
+#include "utils.h"
+#include "ultrasonic.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -52,6 +57,31 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
+/* Hardware variables */
+Servo_Handle_t servo;
+Motor_Handle_t motor;
+Buttons_Handle_t buttons;
+US_Handle_t ultrasonic;
+
+/* Numerical variables */
+volatile extern int counter;
+
+/* Debugging Variables */
+static uint32_t lastTick = 0;
+static uint8_t step = 0;      
+volatile uint32_t green_count = 0;
+volatile uint32_t red_count = 0;
+volatile uint32_t blue_count = 0;
+volatile uint32_t white_count = 0;
+uint32_t last_print = 0;
+uint32_t last_sequence = 0;
+uint16_t front_mm = 0;
+uint16_t left_mm = 0;
+uint16_t right_mm = 0;
+uint16_t rear_mm = 0;
+volatile uint32_t exti_count = 0;
+uint32_t i;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,6 +101,34 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+
+
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    /* Handle button interrupts */
+    switch (GPIO_Pin) {
+        case GREEN_BUTTON_Pin:
+        case RED_BUTTON_Pin:
+        case BLUE_BUTTON_Pin:
+        case WHITE_BUTTON_Pin:
+            Buttons_EXTI_Callback(&buttons, GPIO_Pin);
+            break;
+        
+        /* Handle ultrasonic echo interrupts */
+        case FRONT_ECHO_Pin:
+        case RIGHT_ECHO_Pin:
+        case LEFT_ECHO_Pin: 
+        case REAR_ECHO_Pin:
+					exti_count++;
+            US_EXTI_Callback(&ultrasonic, GPIO_Pin);
+            break;
+        
+        default:
+            break;
+    }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -88,9 +146,10 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
-
+	
   /* USER CODE BEGIN Init */
-
+	
+	
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -110,7 +169,18 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-
+	Servo_Init(&servo, &htim21, TIM_CHANNEL_1);
+	Motor_Init(&motor, &htim22, TIM_CHANNEL_1, TIM_CHANNEL_2, RIGHT_EN_GPIO_Port, RIGHT_EN_Pin, LEFT_EN_GPIO_Port, LEFT_EN_Pin);
+	Utils_Init(&htim6);
+	Debug_Init(&huart2);
+	US_Init(&ultrasonic, &htim6);
+	
+	
+	Servo_Center(&servo);
+	Servo_SetAngle(&servo, 0);
+	
+	US_StartSequence(&ultrasonic);
+	GPIO_PinState state;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -120,9 +190,63 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+
+		
+	
+    
+  
+    US_Update(&ultrasonic);
+    
+   
+    if (US_SequenceComplete(&ultrasonic)) {
+        
+        US_GetAllDistances(&ultrasonic, &front_mm, &left_mm, &right_mm, &rear_mm);
+        
+       
+        if ((HAL_GetTick() - last_sequence) >= 100) {
+            last_sequence = HAL_GetTick();
+            US_StartSequence(&ultrasonic);
+        }
+    }
+    
+    
+    if ((HAL_GetTick() - last_print) >= 500) {
+        last_print = HAL_GetTick();
+        Debug_PrintDistances(front_mm, left_mm, right_mm, rear_mm);
+				Debug_Print("EXTI count: %lu\r\n", exti_count);
+    
+    
+		}
+		
+		/*
+		
+		if (step == 0)
+{
+    Motor_SetSpeed(&motor, 270);
+    lastTick = counter;
+    step = 1;
+}
+else if (step == 1 && (counter - lastTick) >= 1000)
+{
+    Motor_SetSpeed(&motor, -270);
+    lastTick = counter;
+    step = 2;
+}
+else if (step == 2 && (counter - lastTick) >= 1000)
+{
+    Motor_SetSpeed(&motor, 0);
+    lastTick = counter;
+    step = 3;
+}
+else if (step == 3 && (counter - lastTick) >= 1000)
+{
+    step = 0; // repeat sequence
+}
+		*/
+	}
   /* USER CODE END 3 */
 }
+
 
 /**
   * @brief System Clock Configuration
@@ -528,12 +652,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	
+	/*Configure GPIO pins : GREEN_BUTTON_Pin WHITE_BUTTON_Pin */
+  GPIO_InitStruct.Pin = GREEN_BUTTON_Pin|WHITE_BUTTON_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : GREEN_BUTTON_Pin WHITE_BUTTON_Pin FRONT_ECHO_Pin RIGHT_ECHO_Pin
+  /*Configure GPIO pins : FRONT_ECHO_Pin RIGHT_ECHO_Pin
                            LEFT_ECHO_Pin REAR_ECHO_Pin */
-  GPIO_InitStruct.Pin = GREEN_BUTTON_Pin|WHITE_BUTTON_Pin|FRONT_ECHO_Pin|RIGHT_ECHO_Pin
+  GPIO_InitStruct.Pin = FRONT_ECHO_Pin|RIGHT_ECHO_Pin
                           |LEFT_ECHO_Pin|REAR_ECHO_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
@@ -546,8 +676,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : BLUE_BUTTON_Pin RED_BUTTON_Pin */
   GPIO_InitStruct.Pin = BLUE_BUTTON_Pin|RED_BUTTON_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : REAR_TRIG_Pin LEFT_TRIG_Pin RIGHT_TRIG_Pin */
