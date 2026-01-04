@@ -464,6 +464,36 @@
               <FileType>5</FileType>
               <FilePath>..\Core\Inc\ultrasonic.h</FilePath>
             </File>
+            <File>
+              <FileName>encoder.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Core\Inc\encoder.h</FilePath>
+            </File>
+            <File>
+              <FileName>encoder.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\encoder.c</FilePath>
+            </File>
+            <File>
+              <FileName>navigation.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\navigation.c</FilePath>
+            </File>
+            <File>
+              <FileName>pid.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\pid.c</FilePath>
+            </File>
+            <File>
+              <FileName>navigation.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Core\Inc\navigation.h</FilePath>
+            </File>
+            <File>
+              <FileName>pid.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Core\Inc\pid.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
