@@ -18,15 +18,19 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include "car_config.h"
 #include "servo.h"
 #include "motor.h"
 #include "buttons.h"
 #include "utils.h"
 #include "ultrasonic.h"
-
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-
+#include "encoder.h"
+#include "navigation.h"
+#include "pid.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,7 +40,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define DEBUG_PRINT_INTERVAL_MS   500
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -62,25 +66,27 @@ Servo_Handle_t servo;
 Motor_Handle_t motor;
 Buttons_Handle_t buttons;
 US_Handle_t ultrasonic;
+Encoder_Handle_t encoder;
+Navigation_Handle_t navigation;
 
-/* Numerical variables */
-volatile extern int counter;
+/* Timing variables */
 
-/* Debugging Variables */
-static uint32_t lastTick = 0;
-static uint8_t step = 0;      
-volatile uint32_t green_count = 0;
-volatile uint32_t red_count = 0;
-volatile uint32_t blue_count = 0;
-volatile uint32_t white_count = 0;
-uint32_t last_print = 0;
-uint32_t last_sequence = 0;
+uint32_t last_control_update = 0;
+uint32_t last_us_sequence = 0;
+uint32_t last_debug_print = 0;
+
+/* Sensor data cache */
 uint16_t front_mm = 0;
 uint16_t left_mm = 0;
 uint16_t right_mm = 0;
 uint16_t rear_mm = 0;
+
+/* Numerical variables */
+volatile extern int counter;
+
+/* Debug counters */
 volatile uint32_t exti_count = 0;
-uint32_t i;
+volatile uint32_t uart_rx_count = 0;
 
 /* USER CODE END PV */
 
@@ -95,17 +101,22 @@ static void MX_TIM22_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void App_Init(void);
+static void App_OnStart(void);
+static void App_OnStop(void);
+static void App_OnModeChange(Car_Mode_t mode);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-
-
-
+/**
+ * @brief EXTI callback - handles buttons and ultrasonic echo
+ */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+    exti_count++;
+    
     /* Handle button interrupts */
     switch (GPIO_Pin) {
         case GREEN_BUTTON_Pin:
@@ -117,15 +128,124 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         
         /* Handle ultrasonic echo interrupts */
         case FRONT_ECHO_Pin:
-        case RIGHT_ECHO_Pin:
-        case LEFT_ECHO_Pin: 
+        case RIGHT_ECHO_Pin: 
+        case LEFT_ECHO_Pin:  
         case REAR_ECHO_Pin:
-					exti_count++;
             US_EXTI_Callback(&ultrasonic, GPIO_Pin);
             break;
         
         default:
             break;
+    }
+}
+
+/**
+ * @brief Application initialization
+ */
+static void App_Init(void)
+{
+    /* Initialize utility functions (microsecond timer, debug UART) */
+    Utils_Init(&htim6);
+    Debug_Init(&huart2);
+    
+    Debug_Print("\r\n\r\n");
+    Debug_Print("========================================\r\n");
+    Debug_Print("    CARMODE v1.0 - Self Driving RC Car\r\n");
+    Debug_Print("========================================\r\n");
+    Debug_Print("Initializing.. .\r\n\r\n");
+    
+    /* Initialize servo */
+    Servo_Init(&servo, &htim21, TIM_CHANNEL_1);
+    Servo_Center(&servo);
+    Debug_Print("[OK] Servo initialized\r\n");
+    
+    /* Initialize motor */
+    Motor_Init(&motor, &htim22, TIM_CHANNEL_1, TIM_CHANNEL_2, 
+               RIGHT_EN_GPIO_Port, RIGHT_EN_Pin, 
+               LEFT_EN_GPIO_Port, LEFT_EN_Pin);
+    Debug_Print("[OK] Motor driver initialized\r\n");
+    
+    /* Initialize ultrasonic sensors */
+    US_Init(&ultrasonic, &htim6);
+    Debug_Print("[OK] Ultrasonic sensors initialized\r\n");
+    
+    /* Initialize encoder (ESP32 UART) */
+    Encoder_Init(&encoder, &huart1);
+    Encoder_StartReceive(&encoder);
+    Debug_Print("[OK] Encoder UART initialized\r\n");
+    
+    /* Initialize buttons with callbacks */
+    Buttons_Init(&buttons);
+    Buttons_SetCallbacks(&buttons, App_OnStart, App_OnStop, App_OnModeChange);
+    Debug_Print("[OK] Buttons initialized\r\n");
+    
+    /* Initialize navigation */
+    Navigation_Init(&navigation, &motor, &servo, &ultrasonic, &encoder, &buttons);
+    Debug_Print("[OK] Navigation initialized\r\n");
+    
+    /* Set initial LED pattern (slow blink = IDLE) */
+    Utils_SetLEDPattern(LED_PATTERN_BLINK_SLOW);
+    
+    Debug_Print("\r\nInitialization complete!\r\n");
+    Debug_Print("----------------------------------------\r\n");
+    Debug_Print("Controls:\r\n");
+    Debug_Print("  BLUE  = Mode 1 (Obstacle Avoidance)\r\n");
+    Debug_Print("          Press again to toggle 3005/7515mm\r\n");
+    Debug_Print("  WHITE = Mode 2 (Wall Following Race)\r\n");
+    Debug_Print("  GREEN = Start\r\n");
+    Debug_Print("  RED   = Stop\r\n");
+    Debug_Print("----------------------------------------\r\n\r\n");
+}
+
+/**
+ * @brief Called when START button pressed
+ */
+static void App_OnStart(void)
+{
+    Debug_Print("\r\n>>> START <<<\r\n");
+    
+    Car_Mode_t mode = Buttons_GetMode(&buttons);
+    uint16_t target = Buttons_GetTargetDistance(&buttons);
+    
+    if (mode == CAR_MODE_1_OBSTACLE) {
+        Debug_Print("Mode 1: Obstacle Avoidance\r\n");
+        Debug_Print("Target distance: %d mm\r\n", target);
+    } else if (mode == CAR_MODE_2_WALLFOLLOW) {
+        Debug_Print("Mode 2: Wall Following Race\r\n");
+    }
+    Debug_Print("\r\n");
+    
+    Navigation_Start(&navigation, mode, target);
+    Utils_SetLEDPattern(LED_PATTERN_BLINK_FAST);
+}
+
+/**
+ * @brief Called when STOP button pressed
+ */
+static void App_OnStop(void)
+{
+    Debug_Print("\r\n>>> STOP <<<\r\n\r\n");
+    Navigation_Stop(&navigation);
+    Utils_SetLEDPattern(LED_PATTERN_OFF);
+}
+
+/**
+ * @brief Called when mode changes
+ */
+static void App_OnModeChange(Car_Mode_t mode)
+{
+    if (mode == CAR_MODE_1_OBSTACLE) {
+        uint16_t dist = Buttons_GetTargetDistance(&buttons);
+        Debug_Print("Selected:  Mode 1 - Distance: %d mm\r\n", dist);
+        
+        if (dist == TASK1_DISTANCE_SHORT) {
+            Utils_SetLEDPattern(LED_PATTERN_BLINK_1);
+        } else {
+            Utils_SetLEDPattern(LED_PATTERN_BLINK_2);
+        }
+    } else if (mode == CAR_MODE_2_WALLFOLLOW) {
+        Debug_Print("Selected: Mode 2 - Wall Following\r\n");
+        Utils_SetLEDPattern(LED_PATTERN_SOLID);
     }
 }
 
@@ -168,81 +288,94 @@ int main(void)
   MX_TIM22_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
+	
   /* USER CODE BEGIN 2 */
-	Servo_Init(&servo, &htim21, TIM_CHANNEL_1);
-	Motor_Init(&motor, &htim22, TIM_CHANNEL_1, TIM_CHANNEL_2, RIGHT_EN_GPIO_Port, RIGHT_EN_Pin, LEFT_EN_GPIO_Port, LEFT_EN_Pin);
-	Utils_Init(&htim6);
-	Debug_Init(&huart2);
-	US_Init(&ultrasonic, &htim6);
 	
+	/* Initialize application */
+  App_Init();
 	
-	Servo_Center(&servo);
-	Servo_SetAngle(&servo, 0);
+	/* Start ultrasonic sequence */
+  US_StartSequence(&ultrasonic);
 	
-	US_StartSequence(&ultrasonic);
-	GPIO_PinState state;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+		uint32_t now = HAL_GetTick();
+    
+    /* ===== BUTTON PROCESSING ===== */
+    Buttons_Update(&buttons);
+    
+    /* ===== LED UPDATE ===== */
+    Utils_UpdateLED();
+    
+    /* ===== ULTRASONIC SENSOR SEQUENCING ===== */
+    US_Update(&ultrasonic);
+    
+    if (US_SequenceComplete(&ultrasonic)) {
+        US_GetAllDistances(&ultrasonic, &front_mm, &left_mm, &right_mm, &rear_mm);
+        
+        /* Start new sequence every 100ms */
+        if ((now - last_us_sequence) >= 100) {
+            last_us_sequence = now;
+            US_StartSequence(&ultrasonic);
+        }
+    }
+    
+    /* ===== CONTROL LOOP (50Hz) ===== */
+    if ((now - last_control_update) >= CONTROL_LOOP_PERIOD_MS) {
+        last_control_update = now;
+        
+        if (Buttons_IsRunning(&buttons)) {
+            /* Update navigation (handles encoder + navigation logic) */
+            Navigation_Update(&navigation);
+            
+            /* Check for task completion (Mode 1 only) */
+            if (Buttons_GetMode(&buttons) == CAR_MODE_1_OBSTACLE) {
+                if (Navigation_IsComplete(&navigation)) {
+                    Debug_Print("\r\n*** TASK COMPLETE ***\r\n");
+                    Debug_Print("Final distance: %. 1f mm\r\n", Encoder_GetDistance(&encoder));
+                    Debug_Print("Target was: %d mm\r\n", Buttons_GetTargetDistance(&buttons));
+                    Debug_Print("Error: %.1f mm\r\n\r\n",
+                                Encoder_GetDistance(&encoder) - Buttons_GetTargetDistance(&buttons));
+                    
+                    Buttons_SetState(&buttons, CAR_STATE_STOPPED);
+                    Utils_SetLEDPattern(LED_PATTERN_ON);  /* Solid = complete */
+                }
+            }
+        }
+    }
+    
+    /* ===== DEBUG OUTPUT ===== */
+    if ((now - last_debug_print) >= DEBUG_PRINT_INTERVAL_MS) {
+        last_debug_print = now;
+        
+        Car_State_t state = Buttons_GetState(&buttons);
+        
+        if (state == CAR_STATE_RUNNING) {
+            /* Print sensor distances */
+            Debug_Print("D: %. 0f S:%.0f H:%.1f | F:%4d L:%4d R:%4d | Nav:%d\r\n",
+                        Encoder_GetDistance(&encoder),
+                        Encoder_GetSpeed(&encoder),
+                        Encoder_GetHeading(&encoder),
+                        front_mm, left_mm, right_mm,
+                        (Buttons_GetMode(&buttons) == CAR_MODE_1_OBSTACLE) ? 
+                            Navigation_GetNav1State(&navigation) : 
+                            Navigation_GetNav2State(&navigation));
+        } else if (state == CAR_STATE_IDLE) {
+            /* Occasional status print in idle */
+            Debug_Print("IDLE | F:%4d L:%4d R:%4d B:%4d | UART:%lu EXTI:%lu\r\n",
+                        front_mm, left_mm, right_mm, rear_mm,
+                        encoder.packet_count, exti_count);
+        }
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 
 		
-	
-    
-  
-    US_Update(&ultrasonic);
-    
-   
-    if (US_SequenceComplete(&ultrasonic)) {
-        
-        US_GetAllDistances(&ultrasonic, &front_mm, &left_mm, &right_mm, &rear_mm);
-        
-       
-        if ((HAL_GetTick() - last_sequence) >= 100) {
-            last_sequence = HAL_GetTick();
-            US_StartSequence(&ultrasonic);
-        }
-    }
-    
-    
-    if ((HAL_GetTick() - last_print) >= 500) {
-        last_print = HAL_GetTick();
-        Debug_PrintDistances(front_mm, left_mm, right_mm, rear_mm);
-				Debug_Print("EXTI count: %lu\r\n", exti_count);
-    
-    
-		}
-		
-		/*
-		
-		if (step == 0)
-{
-    Motor_SetSpeed(&motor, 270);
-    lastTick = counter;
-    step = 1;
-}
-else if (step == 1 && (counter - lastTick) >= 1000)
-{
-    Motor_SetSpeed(&motor, -270);
-    lastTick = counter;
-    step = 2;
-}
-else if (step == 2 && (counter - lastTick) >= 1000)
-{
-    Motor_SetSpeed(&motor, 0);
-    lastTick = counter;
-    step = 3;
-}
-else if (step == 3 && (counter - lastTick) >= 1000)
-{
-    step = 0; // repeat sequence
-}
-		*/
 	}
   /* USER CODE END 3 */
 }

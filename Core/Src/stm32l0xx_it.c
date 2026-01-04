@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32l0xx_it.h"
+#include "encoder.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -59,8 +60,9 @@ extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim21;
 extern TIM_HandleTypeDef htim22;
 extern UART_HandleTypeDef huart2;
+extern UART_HandleTypeDef huart1;
 /* USER CODE BEGIN EV */
-
+extern Encoder_Handle_t encoder;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -219,6 +221,25 @@ void USART2_IRQHandler(void)
   /* USER CODE BEGIN USART2_IRQn 1 */
 
   /* USER CODE END USART2_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USART1 global interrupt.
+  */
+void USART1_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART1_IRQn 0 */
+  /* Check if RXNE flag is set (data received) */
+  if (__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE)) {
+      uint8_t data = (uint8_t)(huart1.Instance->RDR & 0xFF);
+      Encoder_ProcessByte(&encoder, data);
+  }
+  /* USER CODE END USART1_IRQn 0 */
+  
+  HAL_UART_IRQHandler(&huart1);
+  
+  /* USER CODE BEGIN USART1_IRQn 1 */
+  /* USER CODE END USART1_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
