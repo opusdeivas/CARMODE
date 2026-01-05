@@ -133,6 +133,8 @@ void US_GetAllDistances(US_Handle_t *us, uint16_t *front, uint16_t *left,
  */
 void US_TriggerSensor(US_Handle_t *us, US_Sensor_ID_t sensor);
 
+void US_EXTI_CallbackWithState(US_Handle_t *us, uint16_t GPIO_Pin, uint8_t pin_state);
+
 #ifdef __cplusplus
 }
 #endif

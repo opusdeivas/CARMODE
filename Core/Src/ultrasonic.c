@@ -13,15 +13,14 @@
 
 static void US_ConfigureSensor(US_Sensor_t *sensor, 
                                GPIO_TypeDef *trig_port, uint16_t trig_pin,
-                               GPIO_TypeDef *echo_port, uint16_t echo_pin,
-                               uint16_t max_range, uint16_t timeout)
+                               GPIO_TypeDef *echo_port, uint16_t echo_pin)
 {
     sensor->trig_port = trig_port;
     sensor->trig_pin = trig_pin;
     sensor->echo_port = echo_port;
     sensor->echo_pin = echo_pin;
-    sensor->max_range_mm = max_range;
-    sensor->timeout_us = timeout;
+    //sensor->max_range_mm = max_range;
+    //sensor->timeout_us = timeout;
     sensor->state = US_STATE_IDLE;
     sensor->distance_mm = 0xFFFF;
     sensor->new_data_available = false;
@@ -36,6 +35,56 @@ static uint32_t US_GetTimerCount(US_Handle_t *us)
  * PUBLIC FUNCTIONS
  * ============================================================================ */
 
+void US_EXTI_CallbackWithState(US_Handle_t *us, uint16_t GPIO_Pin, uint8_t pin_state)
+{
+    /* Find which sensor this pin belongs to */
+    US_Sensor_t *sensor = NULL;
+    
+    for (int i = 0; i < US_SENSOR_COUNT; i++) {
+        if (us->sensors[i].echo_pin == GPIO_Pin) {
+            sensor = &us->sensors[i];
+            break;
+        }
+    }
+    
+    if (sensor == NULL) return;
+    
+    uint32_t current_time = __HAL_TIM_GET_COUNTER(us->htim);
+    
+    if (pin_state == GPIO_PIN_SET) {
+        /* Rising edge - echo started */
+        if (sensor->state == US_STATE_WAIT_ECHO_START) {
+            sensor->echo_start_time = current_time;
+            sensor->state = US_STATE_WAIT_ECHO_END;
+        }
+    } else {
+        /* Falling edge - echo ended */
+        if (sensor->state == US_STATE_WAIT_ECHO_END) {
+            sensor->echo_end_time = current_time;
+            
+            /* Calculate pulse width */
+            uint32_t pulse_width;
+            if (sensor->echo_end_time >= sensor->echo_start_time) {
+                pulse_width = sensor->echo_end_time - sensor->echo_start_time;
+            } else {
+                /* Timer overflow */
+                pulse_width = (65535 - sensor->echo_start_time) + sensor->echo_end_time;
+            }
+            
+            /* Convert to distance */
+            sensor->distance_mm = (uint16_t)(pulse_width * US_MM_PER_US);
+            /*
+            if (sensor->distance_mm > sensor->max_range_mm) {
+                sensor->distance_mm = sensor->max_range_mm;
+            }
+            */
+            sensor->state = US_STATE_COMPLETE;
+            sensor->new_data_available = true;
+        }
+    }
+}
+
+
 void US_Init(US_Handle_t *us, TIM_HandleTypeDef *htim)
 {
     us->htim = htim;
@@ -46,23 +95,19 @@ void US_Init(US_Handle_t *us, TIM_HandleTypeDef *htim)
     /* Configure each sensor with default Mode 1 timeouts */
     US_ConfigureSensor(&us->sensors[US_SENSOR_FRONT],
                        FRONT_TRIG_GPIO_Port, FRONT_TRIG_Pin,
-                       FRONT_ECHO_GPIO_Port, FRONT_ECHO_Pin,
-                       US_FRONT_MAX_RANGE, US_FRONT_TIMEOUT_US);
+                       FRONT_ECHO_GPIO_Port, FRONT_ECHO_Pin);
     
     US_ConfigureSensor(&us->sensors[US_SENSOR_RIGHT],
                        RIGHT_TRIG_GPIO_Port, RIGHT_TRIG_Pin,
-                       RIGHT_ECHO_GPIO_Port, RIGHT_ECHO_Pin,
-                       US_SIDE_MAX_RANGE, US_SIDE_TIMEOUT_US);
+                       RIGHT_ECHO_GPIO_Port, RIGHT_ECHO_Pin);
     
     US_ConfigureSensor(&us->sensors[US_SENSOR_LEFT],
                        LEFT_TRIG_GPIO_Port, LEFT_TRIG_Pin,
-                       LEFT_ECHO_GPIO_Port, LEFT_ECHO_Pin,
-                       US_SIDE_MAX_RANGE, US_SIDE_TIMEOUT_US);
+                       LEFT_ECHO_GPIO_Port, LEFT_ECHO_Pin);
     
     US_ConfigureSensor(&us->sensors[US_SENSOR_REAR],
                        REAR_TRIG_GPIO_Port, REAR_TRIG_Pin,
-                       REAR_ECHO_GPIO_Port, REAR_ECHO_Pin,
-                       US_REAR_MAX_RANGE, US_REAR_TIMEOUT_US);
+                       REAR_ECHO_GPIO_Port, REAR_ECHO_Pin);
     
     /* Ensure all triggers are LOW */
     for (int i = 0; i < US_SENSOR_COUNT; i++) {
@@ -146,6 +191,8 @@ void US_Update(US_Handle_t *us)
     uint32_t current_time = US_GetTimerCount(us);
     
     /* Check for timeout */
+	
+	/*
     if (current->state == US_STATE_WAIT_ECHO_START || 
         current->state == US_STATE_WAIT_ECHO_END) {
         
@@ -156,19 +203,19 @@ void US_Update(US_Handle_t *us)
             elapsed = current_time - current->echo_start_time;
         }
         
-        /* Handle timer overflow */
+    
         if (current_time < current->echo_start_time) {
             elapsed = (65535 - current->echo_start_time) + current_time;
         }
         
         if (elapsed > current->timeout_us) {
-            /* Timeout - no obstacle within range */
+            
             current->state = US_STATE_TIMEOUT;
-            current->distance_mm = current->max_range_mm;  /* Report max range */
+            current->distance_mm = current->max_range_mm;  
             current->new_data_available = true;
         }
     }
-    
+    */
     /* Move to next sensor if current is done */
     if (current->state == US_STATE_COMPLETE || 
         current->state == US_STATE_TIMEOUT) {
@@ -229,10 +276,11 @@ void US_EXTI_Callback(US_Handle_t *us, uint16_t GPIO_Pin)
             sensor->distance_mm = (uint16_t)(pulse_width * US_MM_PER_US);
             
             /* Clamp to max range */
+						/*
             if (sensor->distance_mm > sensor->max_range_mm) {
                 sensor->distance_mm = sensor->max_range_mm;
             }
-            
+            */
             sensor->state = US_STATE_COMPLETE;
             sensor->new_data_available = true;
         }

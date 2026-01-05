@@ -21,6 +21,7 @@
 #include "main.h"
 #include "stm32l0xx_it.h"
 #include "encoder.h"
+#include "ultrasonic.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -43,6 +44,8 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 int counter;
+extern US_Handle_t ultrasonic;
+extern volatile uint32_t exti_count;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -153,12 +156,27 @@ void EXTI4_15_IRQHandler(void)
   /* USER CODE BEGIN EXTI4_15_IRQn 0 */
 
   /* USER CODE END EXTI4_15_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(GREEN_BUTTON_Pin);
-  HAL_GPIO_EXTI_IRQHandler(WHITE_BUTTON_Pin);
+	
+	/*
+  uint32_t pending = EXTI->PR;  // Pending register
+  
+  
+  EXTI->PR = 0xFFFFFFFF;  // Write 1 to clear
+  
+ 
+  if (pending & FRONT_ECHO_Pin) US_EXTI_Callback(&ultrasonic, FRONT_ECHO_Pin);
+  if (pending & RIGHT_ECHO_Pin) US_EXTI_Callback(&ultrasonic, RIGHT_ECHO_Pin);
+  if (pending & LEFT_ECHO_Pin)  US_EXTI_Callback(&ultrasonic, LEFT_ECHO_Pin);
+  if (pending & REAR_ECHO_Pin)  US_EXTI_Callback(&ultrasonic, REAR_ECHO_Pin);
+	*/
+
   HAL_GPIO_EXTI_IRQHandler(FRONT_ECHO_Pin);
   HAL_GPIO_EXTI_IRQHandler(RIGHT_ECHO_Pin);
   HAL_GPIO_EXTI_IRQHandler(LEFT_ECHO_Pin);
   HAL_GPIO_EXTI_IRQHandler(REAR_ECHO_Pin);
+	
+	HAL_GPIO_EXTI_IRQHandler(GREEN_BUTTON_Pin);
+  HAL_GPIO_EXTI_IRQHandler(WHITE_BUTTON_Pin);
   HAL_GPIO_EXTI_IRQHandler(B1_Pin);
   HAL_GPIO_EXTI_IRQHandler(BLUE_BUTTON_Pin);
   HAL_GPIO_EXTI_IRQHandler(RED_BUTTON_Pin);
@@ -166,7 +184,37 @@ void EXTI4_15_IRQHandler(void)
 
   /* USER CODE END EXTI4_15_IRQn 1 */
 }
-
+/*
+void EXTI4_15_IRQHandler(void)
+{
+    
+    uint32_t pending = EXTI->PR;
+    
+    
+    uint8_t front_state = HAL_GPIO_ReadPin(FRONT_ECHO_GPIO_Port, FRONT_ECHO_Pin);
+    uint8_t right_state = HAL_GPIO_ReadPin(RIGHT_ECHO_GPIO_Port, RIGHT_ECHO_Pin);
+    uint8_t left_state = HAL_GPIO_ReadPin(LEFT_ECHO_GPIO_Port, LEFT_ECHO_Pin);
+    uint8_t rear_state = HAL_GPIO_ReadPin(REAR_ECHO_GPIO_Port, REAR_ECHO_Pin);
+    
+    
+    EXTI->PR = pending;  // Only clear what was pending
+    
+    
+    if (pending & FRONT_ECHO_Pin) US_EXTI_CallbackWithState(&ultrasonic, FRONT_ECHO_Pin, front_state);
+    if (pending & RIGHT_ECHO_Pin) US_EXTI_CallbackWithState(&ultrasonic, RIGHT_ECHO_Pin, right_state);
+    if (pending & LEFT_ECHO_Pin)  US_EXTI_CallbackWithState(&ultrasonic, LEFT_ECHO_Pin, left_state);
+    if (pending & REAR_ECHO_Pin)  US_EXTI_CallbackWithState(&ultrasonic, REAR_ECHO_Pin, rear_state);
+    
+    
+    if (pending & GREEN_BUTTON_Pin) HAL_GPIO_EXTI_IRQHandler(GREEN_BUTTON_Pin);
+    if (pending & WHITE_BUTTON_Pin) HAL_GPIO_EXTI_IRQHandler(WHITE_BUTTON_Pin);
+    if (pending & B1_Pin) HAL_GPIO_EXTI_IRQHandler(B1_Pin);
+    if (pending & BLUE_BUTTON_Pin) HAL_GPIO_EXTI_IRQHandler(BLUE_BUTTON_Pin);
+    if (pending & RED_BUTTON_Pin) HAL_GPIO_EXTI_IRQHandler(RED_BUTTON_Pin);
+    
+    exti_count++;
+}
+*/
 /**
   * @brief This function handles TIM2 global interrupt.
   */

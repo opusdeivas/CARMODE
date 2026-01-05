@@ -3,11 +3,11 @@
 <title>Static Call Graph - [CARMODEv1\CARMODEv1.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image CARMODEv1\CARMODEv1.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 6230001: Last Updated: Sun Jan  4 16:10:00 2026
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 6230001: Last Updated: Mon Jan  5 04:40:52 2026
 <BR><P>
-<H3>Maximum Stack Usage =        368 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
+<H3>Maximum Stack Usage =        376 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
-_printf_fp_dec_real &rArr; _fp_digits &rArr; _btod_etento &rArr; _btod_emul &rArr; btod_internal_mul &rArr; __ARM_common_ll_muluu
+__rt_entry_main &rArr; main &rArr; Navigation_Update &rArr; Encoder_Update &rArr; tanf &rArr; __mathlib_rredf2 &rArr; __ARM_common_ll_muluu
 <P>
 <H3>
 Functions with no stack information
@@ -432,7 +432,7 @@ Global Symbols
 <P><STRONG><a name="[15c]"></a>__rt_entry_postsh_1</STRONG> (Thumb, 0 bytes, Stack size unknown bytes, __rtentry2.o(.ARM.Collect$$rtentry$$00000009))
 
 <P><STRONG><a name="[5e]"></a>__rt_entry_main</STRONG> (Thumb, 0 bytes, Stack size unknown bytes, __rtentry2.o(.ARM.Collect$$rtentry$$0000000D))
-<BR><BR>[Stack]<UL><LI>Max Depth = 368 + Unknown Stack Size
+<BR><BR>[Stack]<UL><LI>Max Depth = 376 + Unknown Stack Size
 <LI>Call Chain = __rt_entry_main &rArr; main &rArr; Navigation_Update &rArr; Encoder_Update &rArr; tanf &rArr; __mathlib_rredf2 &rArr; __ARM_common_ll_muluu
 </UL>
 <BR>[Calls]<UL><LI><a href="#[5f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;main
@@ -1419,7 +1419,8 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[10e]"></a>HAL_GPIO_ReadPin</STRONG> (Thumb, 10 bytes, Stack size 0 bytes, stm32l0xx_hal_gpio.o(.text.HAL_GPIO_ReadPin))
-<BR><BR>[Called By]<UL><LI><a href="#[c7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;US_EXTI_Callback
+<BR><BR>[Called By]<UL><LI><a href="#[5f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;main
+<LI><a href="#[c7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;US_EXTI_Callback
 </UL>
 
 <P><STRONG><a name="[117]"></a>HAL_GPIO_TogglePin</STRONG> (Thumb, 16 bytes, Stack size 0 bytes, stm32l0xx_hal_gpio.o(.text.HAL_GPIO_TogglePin))
@@ -2020,7 +2021,7 @@ Global Symbols
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> startup_stm32l053xx.o(RESET)
 </UL>
-<P><STRONG><a name="[c7]"></a>US_EXTI_Callback</STRONG> (Thumb, 124 bytes, Stack size 16 bytes, ultrasonic.o(.text.US_EXTI_Callback))
+<P><STRONG><a name="[c7]"></a>US_EXTI_Callback</STRONG> (Thumb, 112 bytes, Stack size 16 bytes, ultrasonic.o(.text.US_EXTI_Callback))
 <BR><BR>[Stack]<UL><LI>Max Depth = 32<LI>Call Chain = US_EXTI_Callback &rArr; __aeabi_fmul
 </UL>
 <BR>[Calls]<UL><LI><a href="#[10e]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_ReadPin
@@ -2038,8 +2039,8 @@ Global Symbols
 <LI><a href="#[5f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;main
 </UL>
 
-<P><STRONG><a name="[10f]"></a>US_Init</STRONG> (Thumb, 172 bytes, Stack size 24 bytes, ultrasonic.o(.text.US_Init))
-<BR><BR>[Stack]<UL><LI>Max Depth = 24<LI>Call Chain = US_Init
+<P><STRONG><a name="[10f]"></a>US_Init</STRONG> (Thumb, 148 bytes, Stack size 16 bytes, ultrasonic.o(.text.US_Init))
+<BR><BR>[Stack]<UL><LI>Max Depth = 16<LI>Call Chain = US_Init
 </UL>
 <BR>[Calls]<UL><LI><a href="#[110]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_TIM_Base_Start
 <LI><a href="#[f1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_WritePin
@@ -2074,8 +2075,8 @@ Global Symbols
 <LI><a href="#[111]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;US_StartSequence
 </UL>
 
-<P><STRONG><a name="[114]"></a>US_Update</STRONG> (Thumb, 92 bytes, Stack size 16 bytes, ultrasonic.o(.text.US_Update))
-<BR><BR>[Stack]<UL><LI>Max Depth = 40<LI>Call Chain = US_Update &rArr; US_TriggerSensor &rArr; Utils_DelayUs
+<P><STRONG><a name="[114]"></a>US_Update</STRONG> (Thumb, 56 bytes, Stack size 8 bytes, ultrasonic.o(.text.US_Update))
+<BR><BR>[Stack]<UL><LI>Max Depth = 32<LI>Call Chain = US_Update &rArr; US_TriggerSensor &rArr; Utils_DelayUs
 </UL>
 <BR>[Calls]<UL><LI><a href="#[112]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;US_TriggerSensor
 </UL>
@@ -2121,14 +2122,15 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[5f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;main
 </UL>
 
-<P><STRONG><a name="[5f]"></a>main</STRONG> (Thumb, 1760 bytes, Stack size 128 bytes, main.o(.text.main))
-<BR><BR>[Stack]<UL><LI>Max Depth = 368 + Unknown Stack Size
+<P><STRONG><a name="[5f]"></a>main</STRONG> (Thumb, 1912 bytes, Stack size 136 bytes, main.o(.text.main))
+<BR><BR>[Stack]<UL><LI>Max Depth = 376 + Unknown Stack Size
 <LI>Call Chain = main &rArr; Navigation_Update &rArr; Encoder_Update &rArr; tanf &rArr; __mathlib_rredf2 &rArr; __ARM_common_ll_muluu
 </UL>
 <BR>[Calls]<UL><LI><a href="#[123]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Navigation_GetNav2State
 <LI><a href="#[122]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Navigation_GetNav1State
 <LI><a href="#[ba]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Encoder_GetHeading
 <LI><a href="#[104]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Encoder_GetSpeed
+<LI><a href="#[10e]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_GPIO_ReadPin
 <LI><a href="#[121]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Buttons_GetState
 <LI><a href="#[b6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Buttons_SetState
 <LI><a href="#[ac]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Buttons_GetTargetDistance

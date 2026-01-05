@@ -350,7 +350,7 @@ int main(void)
         US_GetAllDistances(&ultrasonic, &front_mm, &left_mm, &right_mm, &rear_mm);
         
         /* Start new sequence every 100ms */
-        if ((now - last_us_sequence) >= 100) {
+        if ((now - last_us_sequence) >= 300) {
             last_us_sequence = now;
             US_StartSequence(&ultrasonic);
 						
@@ -383,6 +383,9 @@ int main(void)
     }
     
     /* ===== DEBUG OUTPUT ===== */
+		/* In the debug print section, add this:  */
+
+		
     /*
 		 if (servo_state == 0 & counter - counter_now >= 500) {
 				counter_now = counter;
@@ -400,6 +403,34 @@ int main(void)
 				
         Car_State_t state = Buttons_GetState(&buttons);
         
+			/* Add this diagnostic block */
+    static uint32_t last_diag = 0;
+    if ((now - last_diag) >= 2000) {  // Every 2 seconds
+        last_diag = now;
+        
+        /* Check echo pin states */
+        Debug_Print("DIAG: Echo pins F:%d R:%d L:%d B:%d\r\n",
+            HAL_GPIO_ReadPin(FRONT_ECHO_GPIO_Port, FRONT_ECHO_Pin),
+            HAL_GPIO_ReadPin(RIGHT_ECHO_GPIO_Port, RIGHT_ECHO_Pin),
+            HAL_GPIO_ReadPin(LEFT_ECHO_GPIO_Port, LEFT_ECHO_Pin),
+            HAL_GPIO_ReadPin(REAR_ECHO_GPIO_Port, REAR_ECHO_Pin));
+        
+        /* Check sequence state */
+        Debug_Print("DIAG: US seq_running:%d current:%d\r\n",
+            ultrasonic.sequence_running,
+            ultrasonic.current_sensor);
+        
+        /* Check sensor states */
+        Debug_Print("DIAG:  States F:%d R:%d L:%d B:%d\r\n",
+            ultrasonic.sensors[0].state,
+            ultrasonic.sensors[1].state,
+            ultrasonic.sensors[2].state,
+            ultrasonic.sensors[3].state);
+            
+        /* Check EXTI configuration */
+        Debug_Print("DIAG: EXTI IMR: 0x%08lX PR:0x%08lX\r\n",
+            EXTI->IMR, EXTI->PR);
+    }
         
             /* Print sensor distances */
 					
@@ -419,8 +450,11 @@ int main(void)
             Debug_Print("IDLE | F:%4d L:%4d R:%4d B:%4d | UART:%lu EXTI:%lu\r\n",
                         front_mm, left_mm, right_mm, rear_mm,
                         encoder.packet_count, exti_count);
+					
+					
         }
     
+				
 	}
 				/* Simple encoder test - add in main loop */
 	/*	

@@ -70,18 +70,18 @@ extern "C" {
 #define US_MM_PER_US            0.1715f   // mm per microsecond (round trip)
 
 /* Maximum ranges in mm */
-#define US_FRONT_MAX_RANGE      1500      // 1.5m front sensor range
+//#define US_FRONT_MAX_RANGE      4000      // 1.5m front sensor range
 //#define US_SIDE_MAX_RANGE_MODE1 1000      // 1.0m side range for obstacle avoidance
 //#define US_SIDE_MAX_RANGE_MODE2 1500      // 1.5m side range for wall following
-#define US_SIDE_MAX_RANGE 			1500
-#define US_REAR_MAX_RANGE       500       // 0.5m rear sensor range
+//#define US_SIDE_MAX_RANGE 			4000
+//#define US_REAR_MAX_RANGE       4000       // 0.5m rear sensor range
 
 /* Timeout values in microseconds (range / 0.1715 + margin) */
-#define US_FRONT_TIMEOUT_US     9000      // ~1.5m range
-#define US_SIDE_TIMEOUT_US     9000      // ~1.5m range
+//#define US_FRONT_TIMEOUT_US     40000      // ~1.5m range
+//#define US_SIDE_TIMEOUT_US     	40000      // ~1.5m range
 //#define US_SIDE_TIMEOUT_MODE1   6000      // ~1.0m range
 //#define US_SIDE_TIMEOUT_MODE2   9000      // ~1.5m range
-#define US_REAR_TIMEOUT_US      3000      // ~0.5m range
+//#define US_REAR_TIMEOUT_US      40000      // ~0.5m range
 
 /* Measurement interval */
 #define US_SEQUENCE_INTERVAL_MS 10        // Time between sensor triggers
