@@ -45,20 +45,20 @@ extern "C" {
  * MOTOR PARAMETERS (TIM22, 25kHz, ARR=1279)
  * ============================================================================ */
 #define MOTOR_PWM_MAX           1279      // Maximum PWM value (100% duty)
-#define MOTOR_PWM_MIN           0         // Minimum PWM value
-#define MOTOR_PWM_LIMIT         300      // Software limit (~78% duty) for safety
+#define MOTOR_PWM_MIN           250         // Minimum PWM value
+#define MOTOR_PWM_LIMIT         600      // Software limit (~78% duty) for safety
 
 /* Speed settings in mm/s */
-#define SPEED_CRUISE_MIN        150.0f    // Minimum cruise speed
-#define SPEED_CRUISE_MAX        300.0f    // Maximum cruise speed
-#define SPEED_APPROACH          100.0f    // Approach/careful speed
-#define SPEED_MANEUVER          150.0f    // Speed during obstacle avoidance
-#define SPEED_CRAWL             75.0f    // Very slow speed for precision
+#define SPEED_CRUISE_MIN        350.0f    // Minimum cruise speed
+#define SPEED_CRUISE_MAX        500.0f    // Maximum cruise speed
+#define SPEED_APPROACH          250.0f   // Approach/careful speed
+#define SPEED_MANEUVER          300.0f   // Speed during obstacle avoidance
+#define SPEED_CRAWL             175.0f    // Very slow speed for precision
 
 /* PWM estimates (will be refined by PID) */
-#define PWM_CRUISE              200       // ~27% duty for cruise
-#define PWM_APPROACH            100      // ~16% duty for approach
-#define PWM_MANEUVER            150       // ~20% duty for maneuver
+#define PWM_CRUISE              450       // ~27% duty for cruise
+#define PWM_APPROACH            350      // ~16% duty for approach
+#define PWM_MANEUVER            400       // ~20% duty for maneuver
 
 /* ============================================================================
  * ULTRASONIC PARAMETERS
@@ -122,16 +122,16 @@ extern "C" {
  * PID PARAMETERS
  * ============================================================================ */
 /* Speed PID (controls motor PWM based on encoder feedback) */
-#define PID_SPEED_KP            1.0f
-#define PID_SPEED_KI            0.0f
-#define PID_SPEED_KD            0.0f
-#define PID_SPEED_MAX_OUTPUT    MOTOR_PWM_LIMIT
+#define PID_SPEED_KP            1.5f
+#define PID_SPEED_KI            0.1f
+#define PID_SPEED_KD            0.02f
+#define PID_SPEED_MAX_OUTPUT    (MOTOR_PWM_LIMIT - MOTOR_PWM_MIN)
 #define PID_SPEED_MIN_OUTPUT    0
 
 /* Steering PID for wall following (output is SOFTWARE angle ±5°) */
 #define PID_STEER_KP            0.05f     // SW degrees per mm of error
-#define PID_STEER_KI            0.001f
-#define PID_STEER_KD            0.02f
+#define PID_STEER_KI            0.01f
+#define PID_STEER_KD            0.0f
 #define PID_STEER_MAX_OUTPUT    ((float)SERVO_MAX_ANGLE_SW)   // 5.0
 #define PID_STEER_MIN_OUTPUT    (-(float)SERVO_MAX_ANGLE_SW)  // -5.0
 

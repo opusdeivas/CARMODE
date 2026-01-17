@@ -168,7 +168,7 @@ static void App_Init(void)
     Debug_Print("[OK] Motor driver initialized\r\n");
     
     /* Initialize ultrasonic sensors */
-    US_Init(&ultrasonic, &htim6);
+    US_Init(&ultrasonic, &htim2);
     Debug_Print("[OK] Ultrasonic sensors initialized\r\n");
     
     /* Initialize encoder (ESP32 UART) */
@@ -198,6 +198,8 @@ static void App_Init(void)
     Debug_Print("  RED   = Stop\r\n");
     Debug_Print("----------------------------------------\r\n\r\n");
 }
+
+
 
 /**
  * @brief Called when START button pressed
@@ -296,6 +298,43 @@ int main(void)
 	/* Initialize application */
   App_Init();
 	
+	/* === SENSOR DIAGNOSTIC TEST === */
+Debug_Print("\r\n=== Manual Sensor Test ===\r\n");
+
+for (int i = 0; i < 4; i++) {
+    const char* names[] = {"FRONT", "RIGHT", "LEFT", "REAR"};
+    US_Sensor_t *s = &ultrasonic.sensors[i];
+    
+    Debug_Print("\r\nTesting %s sensor...\r\n", names[i]);
+    Debug_Print("  Trig: Port=%p Pin=0x%04X\r\n", (void*)s->trig_port, s->trig_pin);
+    Debug_Print("  Echo: Port=%p Pin=0x%04X\r\n", (void*)s->echo_port, s->echo_pin);
+    
+    /* Check echo pin state before trigger */
+    uint8_t before = HAL_GPIO_ReadPin(s->echo_port, s->echo_pin);
+    Debug_Print("  Echo pin before trigger: %d\r\n", before);
+    
+    /* Send trigger pulse */
+    HAL_GPIO_WritePin(s->trig_port, s->trig_pin, GPIO_PIN_SET);
+    Utils_DelayUs(12);
+    HAL_GPIO_WritePin(s->trig_port, s->trig_pin, GPIO_PIN_RESET);
+    
+    /* Wait a bit and check echo */
+    Utils_DelayUs(500);  /* 500us - echo should have started */
+    uint8_t during = HAL_GPIO_ReadPin(s->echo_port, s->echo_pin);
+    Debug_Print("  Echo pin 500us after trigger: %d\r\n", during);
+    
+    /* Wait for echo to complete */
+    HAL_Delay(35);  /* 35ms - should be done */
+    uint8_t after = HAL_GPIO_ReadPin(s->echo_port, s->echo_pin);
+    Debug_Print("  Echo pin 35ms after trigger: %d\r\n", after);
+    
+    HAL_Delay(50);  /* Gap between sensors */
+}
+
+Debug_Print("\r\n=== End Sensor Test ===\r\n\r\n");
+/* === END DIAGNOSTIC TEST === */
+
+	
 	/* === ADD THIS DEBUG CODE === */
 	Debug_Print("\r\n=== UART1 Debug ===\r\n");
 
@@ -350,13 +389,25 @@ int main(void)
         US_GetAllDistances(&ultrasonic, &front_mm, &left_mm, &right_mm, &rear_mm);
         
         /* Start new sequence every 100ms */
-        if ((now - last_us_sequence) >= 300) {
+        if ((now - last_us_sequence) >= 50) {
             last_us_sequence = now;
             US_StartSequence(&ultrasonic);
 						
-        }
+        } 
     }
-    
+		
+		static int test_pwm = 0;
+		static uint32_t last_test = 0;
+/*
+		if (HAL_GetTick() - last_test > 2000) {  // Every 2 seconds
+				last_test = HAL_GetTick();
+				test_pwm += 10;
+				if (test_pwm > 300) test_pwm = 0;
+				
+				Motor_Set(&motor, MOTOR_DIR_FORWARD, test_pwm);
+				Debug_Print("PWM: %d\r\n", test_pwm);
+		}
+    */
     /* ===== CONTROL LOOP (50Hz) ===== */
     if ((now - last_control_update) >= CONTROL_LOOP_PERIOD_MS) {
         last_control_update = now;

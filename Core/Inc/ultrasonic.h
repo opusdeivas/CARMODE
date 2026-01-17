@@ -55,12 +55,13 @@ typedef struct {
 } US_Sensor_t;
 
 typedef struct {
-    TIM_HandleTypeDef *htim;    /* Timer for echo measurement (TIM2) */
+    TIM_HandleTypeDef *htim;
     US_Sensor_t sensors[US_SENSOR_COUNT];
     US_Sensor_ID_t current_sensor;
-    uint32_t sequence_start_time;
     bool sequence_running;
-    uint8_t current_mode;       /* 1 = Mode1, 2 = Mode2 (affects timeouts) */
+    uint32_t sequence_start_time;
+    uint32_t trigger_time;          /* Time when current sensor was triggered */
+    uint8_t current_mode;
 } US_Handle_t;
 
 /* ============================================================================

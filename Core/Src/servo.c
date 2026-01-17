@@ -36,6 +36,8 @@ void Servo_Init(Servo_Handle_t *servo, TIM_HandleTypeDef *htim, uint32_t channel
 
 void Servo_SetAngle(Servo_Handle_t *servo, int8_t angle_sw)
 {
+	
+		angle_sw = -angle_sw;
     /* Clamp SOFTWARE angle to limits (±5°) */
     if (angle_sw > servo->max_angle_sw) {
         angle_sw = servo->max_angle_sw;

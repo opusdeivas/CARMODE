@@ -281,12 +281,21 @@ static void Nav1_Update(Navigation_Handle_t *nav)
         
         PID_SetSetpoint(&nav->pid_speed, nav->target_speed_mm_s);
         float pwm_output = PID_Compute(&nav->pid_speed, current_speed, dt);
-        
+					
+					/* Add minimum PWM offset - motor can't move below 250 */
+				if (nav->target_speed_mm_s > 0) {
+						uint16_t pwm = MOTOR_PWM_MIN + (uint16_t)fmaxf(pwm_output, 0);
+						if (pwm > MOTOR_PWM_LIMIT) pwm = MOTOR_PWM_LIMIT;
+						Motor_Set(nav->motor, MOTOR_DIR_FORWARD, pwm);
+				} else {
+						Motor_Stop(nav->motor);
+				}
+        /*
         if (pwm_output > 0) {
             Motor_Set(nav->motor, MOTOR_DIR_FORWARD, (uint16_t)pwm_output);
         } else {
             Motor_Stop(nav->motor);
-        }
+        }*/
     }
 }
 
@@ -304,38 +313,68 @@ static void Nav2_Update(Navigation_Handle_t *nav)
             
         case NAV2_STATE_RUNNING:
         {
-            /* Calculate wall error (positive = closer to right wall, need to steer left) */
-            int16_t wall_error = (int16_t)nav->dist_left - (int16_t)nav->dist_right;
-            
-            /* PID for steering - output is SOFTWARE angle (±5°) */
+            /*
+            int16_t wall_error = (int16_t)nav->dist_right - (int16_t)nav->dist_left;
+          
+						if (wall_error > -20 && wall_error < 20) {
+								wall_error = 0;
+						}
+					
+           
             PID_SetSetpoint(&nav->pid_steering, 0.0f);
             float steering_output = PID_Compute(&nav->pid_steering, (float)wall_error, dt);
             
-            /* steering_output is already clamped to ±5 by PID limits */
-            Servo_SetAngle(nav->servo, (int8_t)steering_output);
+            */
+					
+						static float filtered_error = 0;
+						float raw_error = (float)nav->dist_right - (float)nav->dist_left;
+						filtered_error = 0.15f * raw_error + 0.85f * filtered_error;  /* Heavy filtering */
+						
+						/* Large dead zone for straight driving */
+						float steering_angle = 0.0f;
+						
+						#define DEADZONE 80.0f    /* Big dead zone - 80mm */
+						#define GAIN     0.01f    /* Gentle response */
+						
+						if (filtered_error > DEADZONE) {
+								steering_angle = GAIN * (filtered_error - DEADZONE);
+						} else if (filtered_error < -DEADZONE) {
+								steering_angle = GAIN * (filtered_error + DEADZONE);
+						}
+						/* else: go straight */
+						
+						/* Clamp */
+						if (steering_angle > 5.0f) steering_angle = 5.0f;
+						if (steering_angle < -5.0f) steering_angle = -5.0f;
+						
+						/* Apply with inverted sign */
+						Servo_SetAngle(nav->servo, (int8_t)steering_angle);
+					
+					
             
-            /* Check for obstacle ahead */
+            
+           
             if (nav->dist_front < TASK2_FRONT_STOP_DIST && nav->dist_front > 0) {
                 nav->nav2_state = NAV2_STATE_EMERGENCY_STOP;
                 Motor_Brake(nav->motor);
                 return;
             }
             
-            /* Adjust speed based on conditions */
+            
             if (nav->dist_front < TASK2_FRONT_SLOW_DIST && nav->dist_front > 0) {
-                /* Something ahead - slow down */
+                
                 uint16_t avg_side = (nav->dist_left + nav->dist_right) / 2;
                 
                 if (nav->dist_front < avg_side) {
-                    /* Likely another car */
+                    
                     nav->target_speed_mm_s = (nav->dist_front < TASK2_CAR_DETECT_DIST) ? 
                                              SPEED_CRAWL : SPEED_APPROACH;
                 } else {
-                    /* Probably a turn */
+                    
                     nav->target_speed_mm_s = SPEED_MANEUVER;
                 }
             } else {
-                /* Clear ahead - adjust speed based on track width */
+                
                 uint16_t track_width = nav->dist_left + nav->dist_right;
                 if (track_width > 1500) {
                     nav->target_speed_mm_s = SPEED_CRUISE_MAX;
@@ -350,10 +389,28 @@ static void Nav2_Update(Navigation_Handle_t *nav)
             float current_speed = Encoder_GetSpeed(nav->encoder);
             PID_SetSetpoint(&nav->pid_speed, nav->target_speed_mm_s);
             float pwm_output = PID_Compute(&nav->pid_speed, current_speed, dt);
-            
+						
+						/* Add minimum PWM offset - motor can't move below 250 */
+						if (nav->target_speed_mm_s > 0) {
+								uint16_t pwm = MOTOR_PWM_MIN + (uint16_t)fmaxf(pwm_output, 0);
+								if (pwm > MOTOR_PWM_LIMIT) pwm = MOTOR_PWM_LIMIT;
+								Motor_Set(nav->motor, MOTOR_DIR_FORWARD, pwm);
+						} else {
+								Motor_Stop(nav->motor);
+						}
+						
+            /*
             if (pwm_output > 0) {
                 Motor_Set(nav->motor, MOTOR_DIR_FORWARD, (uint16_t)pwm_output);
             }
+						*//*
+						else if (current_speed > nav->target_speed_mm_s + 50) {
+								
+								Motor_Brake(nav->motor);
+						} else {
+								
+								Motor_Set(nav->motor, MOTOR_DIR_FORWARD, 0);
+						}*/
             break;
         }
             
@@ -434,6 +491,7 @@ void Navigation_Start(Navigation_Handle_t *nav, Car_Mode_t mode, uint16_t target
     nav->emergency_stop = false;
     
     if (mode == CAR_MODE_1_OBSTACLE) {
+				Encoder_ResetOdometry(nav->encoder);
 				US_SetMode(nav->ultrasonic, 1);
         Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
     } else if (mode == CAR_MODE_2_WALLFOLLOW) {
