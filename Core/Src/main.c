@@ -486,16 +486,35 @@ Debug_Print("\r\n=== End Sensor Test ===\r\n\r\n");
             /* Print sensor distances */
 					
 				if (state == CAR_STATE_RUNNING) {
-						Debug_Print("D:%.0f S:%.0f H:%.1f | F:%u L:%u R:%u | Nav:%d\r\n",
-												Encoder_GetDistance(&encoder),
-												Encoder_GetSpeed(&encoder),
-												Encoder_GetHeading(&encoder),
-												(unsigned int)front_mm, 
-												(unsigned int)left_mm, 
-												(unsigned int)right_mm,
-												(Buttons_GetMode(&buttons) == CAR_MODE_1_OBSTACLE) ? 
-														(int)Navigation_GetNav1State(&navigation) : 
+					
+						Car_Mode_t mode = Buttons_GetMode(&buttons);
+					
+						if (mode == CAR_MODE_1_OBSTACLE) {
+						/* Mode 1 specific debug - includes servo angle */
+								int8_t servo_angle = Servo_GetAngle(&servo);
+								Nav1_State_t nav_state = Navigation_GetNav1State(&navigation);
+        
+								Debug_Print("M1|S%d|D: %.0f|H:%.1f|Srv:%d|F:%u L:%u R:%u|St:%d\r\n",
+														(int)nav_state,                          // Nav1 state
+														Encoder_GetDistance(&encoder),           // Distance traveled
+														Encoder_GetHeading(&encoder),            // Heading in degrees
+														(int)servo_angle,                        // Servo SW angle (-5 to +5)
+														(unsigned int)front_mm,                  // Front ultrasonic
+														(unsigned int)left_mm,                   // Left ultrasonic  
+														(unsigned int)right_mm,                  // Right ultrasonic
+														(int)nav_state);                         // State again for reference
+						} else {
+								/* Mode 2 debug */
+								Debug_Print("M2|D:%.0f S:%.0f H:%.1f | F:%u L:%u R:%u | Nav:%d\r\n",
+														Encoder_GetDistance(&encoder),
+														Encoder_GetSpeed(&encoder),
+														Encoder_GetHeading(&encoder),
+														(unsigned int)front_mm, 
+														(unsigned int)left_mm, 
+														(unsigned int)right_mm,
 														(int)Navigation_GetNav2State(&navigation));
+						}
+		
         } else if (state == CAR_STATE_IDLE) {
             
             Debug_Print("IDLE | F:%4d L:%4d R:%4d B:%4d | UART:%lu EXTI:%lu\r\n",
@@ -508,15 +527,16 @@ Debug_Print("\r\n=== End Sensor Test ===\r\n\r\n");
 				
 	}
 				/* Simple encoder test - add in main loop */
-	/*	
+	/*
 	static uint32_t last_enc_test = 0;
 		if ((now - last_enc_test) >= 200) {
 				last_enc_test = now;
-				Debug_Print("ENC pkts:%lu d: %.0f s:%.0f h:%.1f\r\n",
-										encoder. packet_count,
+			Debug_Print("ENC pkts:%lu d:%.0f s:%.0f h:%.1f sa:%.0f\r\n",
+										encoder.packet_count,
 										encoder.total_distance_mm,
 										encoder.speed_mm_s,
 										encoder.heading_rad * 57.3f);  // Convert to degrees
+										Servo_GetWheelAngle
 		}
 	*/
 	

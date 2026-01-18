@@ -32,6 +32,8 @@ static void Nav1_EnterState(Navigation_Handle_t *nav, Nav1_State_t new_state)
             break;
             
         case NAV1_STATE_ARC_OUT:
+						nav->arc_start_distance = Encoder_GetDistance(nav->encoder);
+						nav->arc_distance_compensation = 0;
             nav->target_speed_mm_s = SPEED_MANEUVER;
             nav->arc_start_distance = Encoder_GetDistance(nav->encoder);
             /* arc_steering_angle is SOFTWARE angle (±5) */
@@ -69,13 +71,29 @@ static void Nav1_EnterState(Navigation_Handle_t *nav, Nav1_State_t new_state)
 static void Nav1_UpdateDriveStraight(Navigation_Handle_t *nav)
 {
     float distance = Encoder_GetDistance(nav->encoder);
-    float remaining = nav->target_distance_mm - distance;
+		float effective_distance = distance - nav->arc_distance_compensation;
+    float remaining = nav->target_distance_mm - effective_distance;
+		
+		uint32_t time_in_state = HAL_GetTick() - nav->state_entry_time;
+    if (time_in_state < STARTUP_GRACE_PERIOD_MS) {
+        Servo_SetAngle(nav->servo, 0);  /* Keep straight */
+        nav->obstacle_confirm_count = 0;
+        return;
+    }
     
     /* Check for obstacle */
-    if (nav->dist_front < TASK1_OBSTACLE_DETECT_DIST && nav->dist_front > 0) {
-        nav->obstacle_distance_at_detect = distance;
-        nav->nav1_state = NAV1_STATE_OBSTACLE_DETECTED;
-        return;
+		bool front_valid = (nav->dist_front > 30 && nav->dist_front < 4000);
+    
+    if (front_valid && nav->dist_front < TASK1_OBSTACLE_DETECT_DIST) {
+        nav->obstacle_confirm_count++;
+        if (nav->obstacle_confirm_count >= OBSTACLE_CONFIRM_THRESHOLD) {
+            nav->obstacle_distance_at_detect = distance;
+            nav->nav1_state = NAV1_STATE_OBSTACLE_DETECTED;
+            nav->obstacle_confirm_count = 0;
+            return;
+        }
+    } else {
+        nav->obstacle_confirm_count = 0;
     }
     
     /* Check if approaching target */
@@ -151,6 +169,8 @@ static void Nav1_UpdateArcOut(Navigation_Handle_t *nav)
     if (arc_traveled >= nav->arc_target_distance) {
         /* Check if obstacle is now beside us (front clear) */
         if (nav->dist_front > TASK1_OBSTACLE_DETECT_DIST || nav->dist_front == 0xFFFF) {
+						float arc_len = Encoder_GetDistance(nav->encoder) - nav->arc_start_distance;
+						nav->arc_distance_compensation += arc_len * 0.2f;
             Nav1_EnterState(nav, NAV1_STATE_ARC_BACK);
         } else {
             /* Need more arc - obstacle still ahead */
@@ -176,25 +196,28 @@ static void Nav1_UpdateArcOut(Navigation_Handle_t *nav)
 static void Nav1_UpdateArcBack(Navigation_Handle_t *nav)
 {
     float arc_traveled = Encoder_GetDistance(nav->encoder) - nav->arc_start_distance;
-    
-    /* Arc back to return toward centerline */
     float heading = Encoder_GetHeading(nav->encoder);
     
-    if (arc_traveled >= nav->arc_target_distance || fabsf(heading) < 5.0f) {
-        if (fabsf(heading) < 15.0f) {
-            Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
-        } else if (arc_traveled > nav->arc_target_distance * 1.5f) {
-            /* Safety limit - just go straight */
-            Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
-        }
+    /* Primary exit:  heading is close to zero (pointing forward) */
+    if (fabsf(heading) < 10.0f) {
+        Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
         return;
     }
     
-    /* Check for another obstacle ahead */
-    if (nav->dist_front < TASK1_OBSTACLE_DETECT_DIST && nav->dist_front > 0) {
-        nav->obstacle_distance_at_detect = Encoder_GetDistance(nav->encoder);
-        nav->nav1_state = NAV1_STATE_OBSTACLE_DETECTED;
+    /* Secondary exit: traveled enough AND heading is reasonable */
+    if (arc_traveled >= nav->arc_target_distance && fabsf(heading) < 25.0f) {
+        Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
+        return;
     }
+    
+    /* Safety exit: traveled way too much */
+    if (arc_traveled > nav->arc_target_distance * 2.0f) {
+        Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
+        return;
+    }
+    
+    /* Keep steering back toward centerline */
+    /* Don't check for obstacles during arc_back - commit to the maneuver */
 }
 
 static void Nav1_UpdateApproach(Navigation_Handle_t *nav)
@@ -491,7 +514,7 @@ void Navigation_Start(Navigation_Handle_t *nav, Car_Mode_t mode, uint16_t target
     nav->emergency_stop = false;
     
     if (mode == CAR_MODE_1_OBSTACLE) {
-				Encoder_ResetOdometry(nav->encoder);
+				/*Encoder_ResetOdometry(nav->encoder);*/
 				US_SetMode(nav->ultrasonic, 1);
         Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
     } else if (mode == CAR_MODE_2_WALLFOLLOW) {

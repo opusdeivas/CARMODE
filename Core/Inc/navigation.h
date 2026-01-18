@@ -72,8 +72,12 @@ typedef struct {
     Avoid_Direction_t avoid_direction;
     float arc_start_distance;
     float arc_target_distance;
+		float arc_distance_compensation;
     int8_t arc_steering_angle;      /* SOFTWARE angle (±5°) */
     float obstacle_distance_at_detect;
+		uint8_t obstacle_confirm_count;
+		#define OBSTACLE_CONFIRM_THRESHOLD  3
+		#define STARTUP_GRACE_PERIOD_MS     300
     
     /* Mode 2 state */
     Nav2_State_t nav2_state;

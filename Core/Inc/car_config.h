@@ -100,7 +100,7 @@ extern "C" {
 #define TASK1_OBSTACLE_CLEARANCE_TARGET 200 // Target clearance
 
 /* Detection thresholds */
-#define TASK1_OBSTACLE_DETECT_DIST  500   // Start avoidance when obstacle at this distance
+#define TASK1_OBSTACLE_DETECT_DIST  700   // Start avoidance when obstacle at this distance
 #define TASK1_APPROACH_ZONE         500   // Slow down this far before goal
 #define TASK1_STOP_ZONE             50    // Start stopping this far before goal
 

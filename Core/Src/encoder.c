@@ -180,7 +180,7 @@ void Encoder_Update(Encoder_Handle_t *enc, int8_t steering_angle_sw)
     float wheel_diff_mm = right_delta_mm - left_delta_mm;
 		
 		/* Only update heading if difference is significant */
-		#define HEADING_DEADZONE_MM  10.0f  // Ignore differences < 10mm
+		#define HEADING_DEADZONE_MM  5.0f  // Ignore differences < 10mm
 
 		if (fabsf(wheel_diff_mm) < HEADING_DEADZONE_MM) {
 				/* Negligible difference - assume straight */
@@ -248,7 +248,7 @@ float Encoder_GetLateralOffset(Encoder_Handle_t *enc)
 
 float Encoder_GetHeading(Encoder_Handle_t *enc)
 {
-    return enc->heading_rad * 180.0f / M_PI;
+    return enc->heading_rad * -180.0f / M_PI;
 }
 
 bool Encoder_HasNewData(Encoder_Handle_t *enc)
