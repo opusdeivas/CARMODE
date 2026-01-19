@@ -24,7 +24,7 @@ extern "C" {
  * ENCODER PARAMETERS
  * ============================================================================ */
 #define ENCODER_COUNTS_PER_REV  12        // 6 magnets * 2 sensors
-#define ENCODER_MM_PER_COUNT    17.08f    // 205mm / 12 counts
+#define ENCODER_MM_PER_COUNT    15.50f    // 205mm / 12 counts
 
 /* ============================================================================
  * SERVO PARAMETERS (TIM21, 50Hz, ARR=7999)
@@ -33,7 +33,7 @@ extern "C" {
  *   - Software angle: ±5° max
  *   - Actual wheel angle: ±25° max
  * ============================================================================ */
-#define SERVO_CENTER_CCR        650       // CCR value for 0 degrees
+#define SERVO_CENTER_CCR        670       // CCR value for 0 degrees
 #define SERVO_CCR_PER_DEGREE    25        // CCR change per SOFTWARE degree
 #define SERVO_MAX_ANGLE_SW      5         // Maximum SOFTWARE steering angle (degrees)
 #define SERVO_LINKAGE_RATIO     5.0f      // Mechanical ratio:  wheel_angle = sw_angle * ratio

@@ -31,6 +31,7 @@ typedef enum {
     NAV1_STATE_DRIVE_STRAIGHT,
     NAV1_STATE_OBSTACLE_DETECTED,
     NAV1_STATE_ARC_OUT,             /* Turning away from obstacle */
+		NAV1_STATE_DRIVE_PAST,
     NAV1_STATE_ARC_BACK,            /* Turning back to centerline */
     NAV1_STATE_APPROACH,            /* Approaching target */
     NAV1_STATE_STOPPING,            /* Decelerating to stop */
@@ -73,6 +74,8 @@ typedef struct {
     float arc_start_distance;
     float arc_target_distance;
 		float arc_distance_compensation;
+		float arc_out_distance;               
+		uint16_t obstacle_detect_front_dist;  
     int8_t arc_steering_angle;      /* SOFTWARE angle (±5°) */
     float obstacle_distance_at_detect;
 		uint8_t obstacle_confirm_count;
@@ -160,6 +163,9 @@ void Navigation_EmergencyStop(Navigation_Handle_t *nav);
  * @param nav Pointer to navigation handle
  * @return Current Nav1 state
  */
+ 
+static void Nav1_AddArcCompensation(Navigation_Handle_t *nav, float arc_traveled);
+ 
 Nav1_State_t Navigation_GetNav1State(Navigation_Handle_t *nav);
 
 /**

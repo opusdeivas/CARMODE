@@ -3,7 +3,7 @@
  * @brief   Navigation logic implementation
  * 
  * NOTE: All steering commands use SOFTWARE angles (±5°)
- *       Actual wheel angles are ±25° due to 5: 1 linkage
+ *       Actual wheel angles are ±25° due to 5:  1 linkage
  *       Ackermann calculations use wheel angles internally
  */
 
@@ -31,34 +31,39 @@ static void Nav1_EnterState(Navigation_Handle_t *nav, Nav1_State_t new_state)
             PID_SetSetpoint(&nav->pid_heading, 0.0f);
             break;
             
-        case NAV1_STATE_ARC_OUT:
-						nav->arc_start_distance = Encoder_GetDistance(nav->encoder);
-						nav->arc_distance_compensation = 0;
+        case NAV1_STATE_ARC_OUT: 
+            nav->arc_distance_compensation = 0;
             nav->target_speed_mm_s = SPEED_MANEUVER;
             nav->arc_start_distance = Encoder_GetDistance(nav->encoder);
             /* arc_steering_angle is SOFTWARE angle (±5) */
             Servo_SetAngle(nav->servo, nav->arc_steering_angle);
             break;
+				
+				case NAV1_STATE_DRIVE_PAST:
+						nav->target_speed_mm_s = SPEED_MANEUVER;
+						nav->arc_start_distance = Encoder_GetDistance(nav->encoder);
+						Servo_SetAngle(nav->servo, 0);
+						break;
             
-        case NAV1_STATE_ARC_BACK:
+        case NAV1_STATE_ARC_BACK: 
             nav->target_speed_mm_s = SPEED_MANEUVER;
             nav->arc_start_distance = Encoder_GetDistance(nav->encoder);
             /* Reverse steering to return to centerline */
             Servo_SetAngle(nav->servo, -nav->arc_steering_angle);
             break;
             
-        case NAV1_STATE_APPROACH:
+        case NAV1_STATE_APPROACH: 
             nav->target_speed_mm_s = SPEED_APPROACH;
             Servo_SetAngle(nav->servo, 0);
             break;
             
-        case NAV1_STATE_STOPPING: 
+        case NAV1_STATE_STOPPING:  
             nav->target_speed_mm_s = 0.0f;
             Motor_Brake(nav->motor);
             Servo_SetAngle(nav->servo, 0);
             break;
             
-        case NAV1_STATE_COMPLETE: 
+        case NAV1_STATE_COMPLETE:  
             Motor_Stop(nav->motor);
             Servo_SetAngle(nav->servo, 0);
             break;
@@ -68,13 +73,25 @@ static void Nav1_EnterState(Navigation_Handle_t *nav, Nav1_State_t new_state)
     }
 }
 
+static void Nav1_AddArcCompensation(Navigation_Handle_t *nav, float arc_traveled)
+{
+    float wheel_angle = fabsf((float)nav->arc_steering_angle * SERVO_LINKAGE_RATIO);
+    float turn_radius = fabsf(Ackermann_GetTurnRadius(wheel_angle));
+    
+    if (turn_radius > 10.0f) {
+        float arc_angle_rad = arc_traveled / turn_radius;
+        float forward_progress = turn_radius * sinf(arc_angle_rad);
+        nav->arc_distance_compensation += (arc_traveled - forward_progress);
+    }
+}
+
 static void Nav1_UpdateDriveStraight(Navigation_Handle_t *nav)
 {
     float distance = Encoder_GetDistance(nav->encoder);
-		float effective_distance = distance - nav->arc_distance_compensation;
+    float effective_distance = distance - nav->arc_distance_compensation;
     float remaining = nav->target_distance_mm - effective_distance;
-		
-		uint32_t time_in_state = HAL_GetTick() - nav->state_entry_time;
+    
+    uint32_t time_in_state = HAL_GetTick() - nav->state_entry_time;
     if (time_in_state < STARTUP_GRACE_PERIOD_MS) {
         Servo_SetAngle(nav->servo, 0);  /* Keep straight */
         nav->obstacle_confirm_count = 0;
@@ -82,7 +99,7 @@ static void Nav1_UpdateDriveStraight(Navigation_Handle_t *nav)
     }
     
     /* Check for obstacle */
-		bool front_valid = (nav->dist_front > 30 && nav->dist_front < 4000);
+    bool front_valid = (nav->dist_front > 30 && nav->dist_front < 4000);
     
     if (front_valid && nav->dist_front < TASK1_OBSTACLE_DETECT_DIST) {
         nav->obstacle_confirm_count++;
@@ -128,35 +145,11 @@ static void Nav1_UpdateObstacleDetected(Navigation_Handle_t *nav)
         nav->arc_steering_angle = SERVO_MAX_ANGLE_SW;   /* Full right = +5° SW = +25° wheel */
     }
     
-    /* Calculate arc distance needed to clear obstacle */
-    /* Using WHEEL angle for actual turn radius calculation */
-    float wheel_angle = (float)nav->arc_steering_angle * SERVO_LINKAGE_RATIO;  /* ±25° */
-    float turn_radius = Ackermann_GetTurnRadius(wheel_angle);  /* ~365mm at 25° */
+    /* Store the detection distance for exit condition */
+    nav->obstacle_detect_front_dist = nav->dist_front;
     
-    /* Need lateral displacement of:  obstacle_radius + clearance = 200 + 200 = 400mm */
-    float lateral_needed = (TASK1_OBSTACLE_MAX_DIA / 2.0f) + TASK1_OBSTACLE_CLEARANCE_TARGET;
-    
-    /* lateral = R * (1 - cos(arc_angle))
-     * arc_angle = acos(1 - lateral/R)
-     * For R=365mm, lateral=400mm:  ratio > 1, so we need multiple arcs
-     * 
-     * Actually with R=365mm, max lateral in 90° arc = R = 365mm
-     * For 400mm we need slightly more than 90° arc
-     */
-    float ratio = lateral_needed / fabsf(turn_radius);
-    float arc_angle_rad;
-    
-    if (ratio >= 1.0f) {
-        /* Need more than 90° arc - use 90° and we'll do more if needed */
-        arc_angle_rad = M_PI / 2.0f;  /* 90° */
-    } else {
-        arc_angle_rad = acosf(1.0f - ratio);
-    }
-    
-    nav->arc_target_distance = fabsf(turn_radius * arc_angle_rad);
-    
-    /* Add margin */
-    nav->arc_target_distance += 100.0f;
+    /* Reset arc tracking */
+    nav->arc_out_distance = 0;
     
     Nav1_EnterState(nav, NAV1_STATE_ARC_OUT);
 }
@@ -165,65 +158,84 @@ static void Nav1_UpdateArcOut(Navigation_Handle_t *nav)
 {
     float arc_traveled = Encoder_GetDistance(nav->encoder) - nav->arc_start_distance;
     
-    /* Check if we've completed the arc */
-    if (arc_traveled >= nav->arc_target_distance) {
-        /* Check if obstacle is now beside us (front clear) */
-        if (nav->dist_front > TASK1_OBSTACLE_DETECT_DIST || nav->dist_front == 0xFFFF) {
-						float arc_len = Encoder_GetDistance(nav->encoder) - nav->arc_start_distance;
-						nav->arc_distance_compensation += arc_len * 0.2f;
-            Nav1_EnterState(nav, NAV1_STATE_ARC_BACK);
-        } else {
-            /* Need more arc - obstacle still ahead */
-            nav->arc_target_distance += 150.0f;
-        }
+    /* Get the side sensor that should see the obstacle (opposite of turn direction) */
+    uint16_t side_dist = (nav->avoid_direction == AVOID_LEFT) ? 
+                         nav->dist_right : nav->dist_left;
+    
+    /* Exit condition: front is clear AND obstacle is now beside/behind us */
+    bool front_clear = (nav->dist_front > nav->obstacle_detect_front_dist) || 
+                       (nav->dist_front > TASK1_OBSTACLE_DETECT_DIST);
+    bool obstacle_passed = (side_dist > nav->obstacle_detect_front_dist) ||
+                           (side_dist > TASK1_OBSTACLE_DETECT_DIST);
+    
+    /* Minimum arc distance to prevent premature exit */
+    bool min_arc_done = (arc_traveled > 200.0f);
+    
+    if (front_clear && obstacle_passed && min_arc_done) {
+        /* Store how far we traveled for ARC_BACK */
+        nav->arc_out_distance = arc_traveled;
+        
+        Nav1_AddArcCompensation(nav, arc_traveled);
+        Nav1_EnterState(nav, NAV1_STATE_DRIVE_PAST);
         return;
     }
     
-    /* Check side clearance */
-    uint16_t side_dist = (nav->avoid_direction == AVOID_LEFT) ? 
-                         nav->dist_left : nav->dist_right;
-    
-    if (side_dist < TASK1_OBSTACLE_CLEARANCE_MIN && side_dist > 0) {
-        /* Too close to side, reduce steering (3° SW = 15° wheel) */
-        int8_t reduced_angle = (nav->arc_steering_angle > 0) ? 3 : -3;
-        Servo_SetAngle(nav->servo, reduced_angle);
-    } else {
-        /* Maintain full steering */
-        Servo_SetAngle(nav->servo, nav->arc_steering_angle);
+    /* Safety:  don't arc forever */
+    if (arc_traveled > 1500.0f) {
+        nav->arc_out_distance = arc_traveled;
+        Nav1_AddArcCompensation(nav, arc_traveled);
+        Nav1_EnterState(nav, NAV1_STATE_ARC_BACK);
+        return;
     }
+    
+    /* Maintain steering */
+    Servo_SetAngle(nav->servo, nav->arc_steering_angle);
+}
+
+static void Nav1_UpdateDrivePast(Navigation_Handle_t *nav)
+{
+    float distance_in_state = Encoder_GetDistance(nav->encoder) - nav->arc_start_distance;
+    
+    /* Drive straight for 200mm (20cm) to clear the obstacle */
+    #define DRIVE_PAST_DISTANCE 200.0f
+    
+    if (distance_in_state >= DRIVE_PAST_DISTANCE) {
+        Nav1_EnterState(nav, NAV1_STATE_ARC_BACK);
+        return;
+    }
+    
+    /* Keep driving straight */
+    Servo_SetAngle(nav->servo, 0);
 }
 
 static void Nav1_UpdateArcBack(Navigation_Handle_t *nav)
 {
     float arc_traveled = Encoder_GetDistance(nav->encoder) - nav->arc_start_distance;
-    float heading = Encoder_GetHeading(nav->encoder);
     
-    /* Primary exit:  heading is close to zero (pointing forward) */
-    if (fabsf(heading) < 10.0f) {
+    /* Turn back for HALF the distance we turned out */
+    float target_arc = nav->arc_out_distance * 0.5f;
+    
+    if (arc_traveled >= target_arc) {
+        Nav1_AddArcCompensation(nav, arc_traveled);
         Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
         return;
     }
     
-    /* Secondary exit: traveled enough AND heading is reasonable */
-    if (arc_traveled >= nav->arc_target_distance && fabsf(heading) < 25.0f) {
+    /* Safety: don't arc forever */
+    if (arc_traveled > 1000.0f) {
+        Nav1_AddArcCompensation(nav, arc_traveled);
         Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
         return;
     }
     
-    /* Safety exit: traveled way too much */
-    if (arc_traveled > nav->arc_target_distance * 2.0f) {
-        Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
-        return;
-    }
-    
-    /* Keep steering back toward centerline */
-    /* Don't check for obstacles during arc_back - commit to the maneuver */
+    /* Maintain opposite steering (already set in Nav1_EnterState) */
 }
 
 static void Nav1_UpdateApproach(Navigation_Handle_t *nav)
 {
     float distance = Encoder_GetDistance(nav->encoder);
-    float remaining = nav->target_distance_mm - distance;
+    float effective_distance = distance - nav->arc_distance_compensation;  
+    float remaining = nav->target_distance_mm - effective_distance;  
     
     /* Check for obstacle even in approach phase */
     if (nav->dist_front < TASK1_OBSTACLE_DETECT_DIST / 2 && nav->dist_front > 0) {
@@ -279,6 +291,9 @@ static void Nav1_Update(Navigation_Handle_t *nav)
         case NAV1_STATE_ARC_OUT:
             Nav1_UpdateArcOut(nav);
             break;
+				case NAV1_STATE_DRIVE_PAST:
+						Nav1_UpdateDrivePast(nav);
+						break;
         case NAV1_STATE_ARC_BACK:
             Nav1_UpdateArcBack(nav);
             break;
@@ -304,21 +319,15 @@ static void Nav1_Update(Navigation_Handle_t *nav)
         
         PID_SetSetpoint(&nav->pid_speed, nav->target_speed_mm_s);
         float pwm_output = PID_Compute(&nav->pid_speed, current_speed, dt);
-					
-					/* Add minimum PWM offset - motor can't move below 250 */
-				if (nav->target_speed_mm_s > 0) {
-						uint16_t pwm = MOTOR_PWM_MIN + (uint16_t)fmaxf(pwm_output, 0);
-						if (pwm > MOTOR_PWM_LIMIT) pwm = MOTOR_PWM_LIMIT;
-						Motor_Set(nav->motor, MOTOR_DIR_FORWARD, pwm);
-				} else {
-						Motor_Stop(nav->motor);
-				}
-        /*
-        if (pwm_output > 0) {
-            Motor_Set(nav->motor, MOTOR_DIR_FORWARD, (uint16_t)pwm_output);
+            
+        /* Add minimum PWM offset - motor can't move below 250 */
+        if (nav->target_speed_mm_s > 0) {
+            uint16_t pwm = MOTOR_PWM_MIN + (uint16_t)fmaxf(pwm_output, 0);
+            if (pwm > MOTOR_PWM_LIMIT) pwm = MOTOR_PWM_LIMIT;
+            Motor_Set(nav->motor, MOTOR_DIR_FORWARD, pwm);
         } else {
             Motor_Stop(nav->motor);
-        }*/
+        }
     }
 }
 
@@ -336,68 +345,46 @@ static void Nav2_Update(Navigation_Handle_t *nav)
             
         case NAV2_STATE_RUNNING:
         {
-            /*
-            int16_t wall_error = (int16_t)nav->dist_right - (int16_t)nav->dist_left;
-          
-						if (wall_error > -20 && wall_error < 20) {
-								wall_error = 0;
-						}
-					
-           
-            PID_SetSetpoint(&nav->pid_steering, 0.0f);
-            float steering_output = PID_Compute(&nav->pid_steering, (float)wall_error, dt);
+            static float filtered_error = 0;
+            float raw_error = (float)nav->dist_right - (float)nav->dist_left;
+            filtered_error = 0.15f * raw_error + 0.85f * filtered_error;  /* Heavy filtering */
             
-            */
-					
-						static float filtered_error = 0;
-						float raw_error = (float)nav->dist_right - (float)nav->dist_left;
-						filtered_error = 0.15f * raw_error + 0.85f * filtered_error;  /* Heavy filtering */
-						
-						/* Large dead zone for straight driving */
-						float steering_angle = 0.0f;
-						
-						#define DEADZONE 80.0f    /* Big dead zone - 80mm */
-						#define GAIN     0.01f    /* Gentle response */
-						
-						if (filtered_error > DEADZONE) {
-								steering_angle = GAIN * (filtered_error - DEADZONE);
-						} else if (filtered_error < -DEADZONE) {
-								steering_angle = GAIN * (filtered_error + DEADZONE);
-						}
-						/* else: go straight */
-						
-						/* Clamp */
-						if (steering_angle > 5.0f) steering_angle = 5.0f;
-						if (steering_angle < -5.0f) steering_angle = -5.0f;
-						
-						/* Apply with inverted sign */
-						Servo_SetAngle(nav->servo, (int8_t)steering_angle);
-					
-					
+            /* Large dead zone for straight driving */
+            float steering_angle = 0.0f;
             
+            #define DEADZONE 80.0f    /* Big dead zone - 80mm */
+            #define GAIN     0.01f    /* Gentle response */
             
-           
+            if (filtered_error > DEADZONE) {
+                steering_angle = GAIN * (filtered_error - DEADZONE);
+            } else if (filtered_error < -DEADZONE) {
+                steering_angle = GAIN * (filtered_error + DEADZONE);
+            }
+            /* else: go straight */
+            
+            /* Clamp */
+            if (steering_angle > 5.0f) steering_angle = 5.0f;
+            if (steering_angle < -5.0f) steering_angle = -5.0f;
+            
+            /* Apply with inverted sign */
+            Servo_SetAngle(nav->servo, (int8_t)steering_angle);
+            
             if (nav->dist_front < TASK2_FRONT_STOP_DIST && nav->dist_front > 0) {
                 nav->nav2_state = NAV2_STATE_EMERGENCY_STOP;
                 Motor_Brake(nav->motor);
                 return;
             }
             
-            
             if (nav->dist_front < TASK2_FRONT_SLOW_DIST && nav->dist_front > 0) {
-                
                 uint16_t avg_side = (nav->dist_left + nav->dist_right) / 2;
                 
                 if (nav->dist_front < avg_side) {
-                    
                     nav->target_speed_mm_s = (nav->dist_front < TASK2_CAR_DETECT_DIST) ? 
                                              SPEED_CRAWL : SPEED_APPROACH;
                 } else {
-                    
                     nav->target_speed_mm_s = SPEED_MANEUVER;
                 }
             } else {
-                
                 uint16_t track_width = nav->dist_left + nav->dist_right;
                 if (track_width > 1500) {
                     nav->target_speed_mm_s = SPEED_CRUISE_MAX;
@@ -412,28 +399,15 @@ static void Nav2_Update(Navigation_Handle_t *nav)
             float current_speed = Encoder_GetSpeed(nav->encoder);
             PID_SetSetpoint(&nav->pid_speed, nav->target_speed_mm_s);
             float pwm_output = PID_Compute(&nav->pid_speed, current_speed, dt);
-						
-						/* Add minimum PWM offset - motor can't move below 250 */
-						if (nav->target_speed_mm_s > 0) {
-								uint16_t pwm = MOTOR_PWM_MIN + (uint16_t)fmaxf(pwm_output, 0);
-								if (pwm > MOTOR_PWM_LIMIT) pwm = MOTOR_PWM_LIMIT;
-								Motor_Set(nav->motor, MOTOR_DIR_FORWARD, pwm);
-						} else {
-								Motor_Stop(nav->motor);
-						}
-						
-            /*
-            if (pwm_output > 0) {
-                Motor_Set(nav->motor, MOTOR_DIR_FORWARD, (uint16_t)pwm_output);
+            
+            /* Add minimum PWM offset - motor can't move below 250 */
+            if (nav->target_speed_mm_s > 0) {
+                uint16_t pwm = MOTOR_PWM_MIN + (uint16_t)fmaxf(pwm_output, 0);
+                if (pwm > MOTOR_PWM_LIMIT) pwm = MOTOR_PWM_LIMIT;
+                Motor_Set(nav->motor, MOTOR_DIR_FORWARD, pwm);
+            } else {
+                Motor_Stop(nav->motor);
             }
-						*//*
-						else if (current_speed > nav->target_speed_mm_s + 50) {
-								
-								Motor_Brake(nav->motor);
-						} else {
-								
-								Motor_Set(nav->motor, MOTOR_DIR_FORWARD, 0);
-						}*/
             break;
         }
             
@@ -498,6 +472,11 @@ void Navigation_Init(Navigation_Handle_t *nav,
     nav->last_update_time = 0;
     nav->state_entry_time = 0;
     
+    /* Initialize new fields */
+    nav->arc_distance_compensation = 0.0f;
+    nav->arc_out_distance = 0.0f;
+    nav->obstacle_detect_front_dist = 0;
+    
     nav->is_initialized = true;
     nav->emergency_stop = false;
 }
@@ -513,12 +492,16 @@ void Navigation_Start(Navigation_Handle_t *nav, Car_Mode_t mode, uint16_t target
     nav->target_distance_mm = target_distance;
     nav->emergency_stop = false;
     
+    /* Reset arc compensation for new run */
+    nav->arc_distance_compensation = 0.0f;
+    nav->arc_out_distance = 0.0f;
+    nav->obstacle_detect_front_dist = 0;
+    
     if (mode == CAR_MODE_1_OBSTACLE) {
-				/*Encoder_ResetOdometry(nav->encoder);*/
-				US_SetMode(nav->ultrasonic, 1);
+        US_SetMode(nav->ultrasonic, 1);
         Nav1_EnterState(nav, NAV1_STATE_DRIVE_STRAIGHT);
     } else if (mode == CAR_MODE_2_WALLFOLLOW) {
-				US_SetMode(nav->ultrasonic, 2);
+        US_SetMode(nav->ultrasonic, 2);
         nav->nav2_state = NAV2_STATE_RUNNING;
         nav->target_speed_mm_s = SPEED_CRUISE_MIN;
         Servo_SetAngle(nav->servo, 0);
